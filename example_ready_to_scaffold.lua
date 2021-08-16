@@ -49,7 +49,7 @@ structGenLib.register_prefab({
 });
 
 structGenLib.register_prefab({
-	name = "hallway",
+	name = "long hallway", -- calling it "long hallway" since there's already a prefabType using "hallway", and keeping the two distinct is handy later as we can refer to either one in validPrefabs tables.
 	size = vector.new(7, 5, 5),
 	type = prefabType.hallway
 });
@@ -124,4 +124,10 @@ structGenLib.register_prefab({
 	name = "treasure chest",
 	size = vector.new(1, 2, 1),
 	type = prefabType.treasure1
+});
+
+structGenLib.register_prefab({
+	name = "covered way",
+	size = vector.new(9, 10, 5),
+	type = prefabType.hallway
 });

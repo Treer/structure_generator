@@ -3,7 +3,7 @@
 --   1 = print(...)
 --   2 = minetest.chat_send_all(...)
 --   4 = minetest.log("info", ...)
-local DEBUG_FLAGS = 6
+local DEBUG_FLAGS = 0
 
 
 
@@ -108,7 +108,7 @@ minetest.register_tool(structure_generator.modName .. ":magic_wand", {
         if pos == nil then
             structure_generator.debug("spell failed, no position found")
         else
-            structure_generator.lib.build_structure("medium room1", pos)
+            structure_generator.lib.build_structure("medium room1", {x = pos.x - 3, y = pos.y, z = pos.z - 3})
         end
 
         -- unload the working example and reload the scaffold example

@@ -120,7 +120,7 @@ end
 -- ===========================
 --             API
 -- ===========================
-local defaultRecursionLimit = 10
+local defaultRecursionLimit = 7
 local modPath = minetest.get_modpath(minetest.get_current_modname())
 
 local placePrefab         -- the placePrefab(prefabName, pos, direction, recursionLimit) function will be assigned to this var
@@ -240,17 +240,34 @@ end
 
 -- returns a probability list of prefabs that have a name or type that matches nameOrType
 -- (All items will have the same weighting, which can be limited by specifying totalWeight)
-local function expandPrefabNameOrType(nameOrType, totalWeight)
+--
+-- isForDecorationPoint provides some context in case nameOrType is "all"
+local function expandPrefabNameOrType(nameOrType, isForDecorationPoint, totalWeight)
+
+    if nameOrType == "none" then
+        return {}
+    end
+
     local result = {}
+    local includeAsMemberOfAll = false
+    local itemCount = 0
+
     for _, prefab in pairs(structGenLib.registered_prefabs) do
-        if prefab.name == nameOrType or prefab.type == nameOrType then
+
+        if nameOrType == "all" then
+            local prefabIsDecoration = structGenLib.registered_decoration_types[prefab.type] == true
+            includeAsMemberOfAll = (isForDecorationPoint == prefabIsDecoration) or (isForDecorationPoint == nil)
+        end
+
+        if prefab.name == nameOrType or prefab.type == nameOrType or includeAsMemberOfAll then
             result[prefab.name] = 1
+            itemCount = itemCount + 1
         end
     end
 
     if totalWeight ~= nil then
         -- adjust weightings so they sum to totalWeight
-        for name, _ in result do result[name] = totalWeight / #result end
+        for name, _ in pairs(result) do result[name] = totalWeight / itemCount end
     end
 
     return result
@@ -258,41 +275,31 @@ end
 
 -- validPrefabs might be a name string, a prefab type, or a list of these with probabilities
 -- return a new probability list of prefab names
-local function normalizeValidPrefabs(validPrefabs, isDecorationPoints)
+-- isForDecorationPoint provides some context in case validPrefabs contains "all"
+local function normalizeValidPrefabs(validPrefabs, isForDecorationPoint)
 
     local result = {}
 
-    if validPrefabs == "none" then
-        return {}
-    elseif validPrefabs == "all" then
-        for _, prefab in pairs(structGenLib.registered_prefabs) do
-            local prefabIsDecoration = structGenLib.registered_decoration_types[prefab.type] == true
-            if (isDecorationPoints == prefabIsDecoration) or (isDecorationPoints == nil) then
-                result[prefab.name] = 1
-            end
-        end
-        return result
-    end
-
     if type(validPrefabs) == 'string' then
         -- return all prefabs with a name or type that match the string
-        return expandPrefabNameOrType(validPrefabs)
+        return expandPrefabNameOrType(validPrefabs, isForDecorationPoint)
 
     elseif type(validPrefabs) == 'table' then
         -- expand out any prefab types
-        for key, value in validPrefabs do
+        for key, value in pairs(validPrefabs) do
             if type(value) == 'string' then
-                -- the table is a list of prefab names, or prefab types
-                for name, weight in expandPrefabNameOrType(value) do
-                    result[name] = weight
+                -- this item in the table is a prefab name or prefab type
+                for name, weight in pairs(expandPrefabNameOrType(value, isForDecorationPoint)) do
+                    result[name] = (result[name] or 0) + weight
                 end
             elseif type(value) == 'number' then
-                -- the table is a probability list, but the keys might be either prefab names, or prefab types
-                for name, weight in expandPrefabNameOrType(key, value) do
-                    result[name] = weight
+                -- this item in the table is a probability list item, but the key might be either a prefab name or prefab type
+                for name, weight in pairs(expandPrefabNameOrType(key, isForDecorationPoint, value)) do
+                    result[name] = (result[name] or 0) + weight
                 end
             end
         end
+        debug("## expanded probability table: %s", result)
     end
     return result;
 end
@@ -387,7 +394,7 @@ local function tryPrefab(prefabName, prefabPos, connectionPoint, connectingPrefa
 
         if not collision then
             markPointAsConnected(connectionPos, connectingPrefab.name)
-            placePrefab(connectingPrefab.name, p1, newDirection, recursionLimit - 1)
+            placePrefab(connectingPrefab.name, p1, newDirection, recursionLimit)
             --minetest.set_node(p1, {name="default:mese"}) -- debug marker
             --minetest.set_node(p2, {name="default:meselamp"})
 
@@ -451,7 +458,7 @@ local function placeConnections(prefab, pos, isDecorationPoints, recursionLimit)
         -- One of the entraces is probably already connected to the prefab that spawned this one, so skip that connection point
         if not testIfPointAlreadyConnected(vector.add(pos, point)) then
             local validPrefabs
-            if recursionLimit > 0 then
+            if recursionLimit > 0 or (isDecorationPoints and recursionLimit > -2) then -- ensure a room at the recursion limit can still be decorated
                 validPrefabs = normalizeValidPrefabs(point.validPrefabs, isDecorationPoints) -- get a probability list of valid prefabs
             else
                 validPrefabs = {}

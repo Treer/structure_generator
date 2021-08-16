@@ -24,7 +24,7 @@ The mod has two main parts:
 * Prefab creation tools (chat-commands)
 * The `structure_generator_lib.lua` library you copy into your mod
 
-A 'demo' magic wand that builds structures is also provided - use a map with a dummy backend if you're going to play with the wand, or a map you don't care about. With great power comes great responsibility.
+A demo magic wand that builds structures is also provided - use a map with a dummy backend if you're going to play with the wand, or a map you don't care about. With great power comes great responsibility.
 
 The prefab creation tools are used to create the structure data and make it easy to edit your schematics inside Minetest and be able to export them. You would copy the generated data into your mod along with `structure_generator_lib.lua` to enable the mod to create large procedural structures (once there's better documentation).
 
@@ -51,7 +51,7 @@ To try it out
 * `/fill_walls default:sandstonebrick`
 * In the Creative inventory, search for "struct" to bring up all the nodes this mod provides
 * Edit the "prefab" sections of your structure, add doors etc.
-  * Add Connection marker nodes to specify where these "prefabs" may join to other,
+  * Add Connection marker nodes to specify where these prefabs may join to other,
   * Add Decoration marker nodes to specify where decorative prefabs should be placed,
 * `/export_prefabs`
 
@@ -67,6 +67,8 @@ This is still very Work In Progress, it needs much better documentation, and the
 * `/scaffold_prefabs` will apply any .mts files that were saved, so keep those up to date with `/export_prefabs`
 * Most of the scaffolding functions will avoid overwriting blocks (`/cleararea` is an exception), so you can still `/scaffold_prefabs` after you've started building - just make sure any .mts files are up to date.
 * Add new buildings to the end of the scaffold.lua file to avoid `/scaffold_prefabs` changing which buildings are where - as the map won't change.
+
+**Documentation:** Currently in the [wiki](https://github.com/Treer/structure_generator/wiki).
 
 **Forum:** [thread](https://forum.minetest.net/viewtopic.php?t=27173)
 

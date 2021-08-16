@@ -460,7 +460,7 @@ local function savePrefabSchematic(prefab)
 end
 
 local function writeBoilerplate(file, prefabList)
-    file:write("-- Auto-generated\n")
+    file:write("-- Auto-generated at " .. os.date() .. "\n")
     file:write("local structGenLib = my_mod_namespace.get_structure_generator_lib()\n\n")
 
     file:write("-- connection points will only attach to connection points of the same type\n")
@@ -484,6 +484,12 @@ local function writeBoilerplate(file, prefabList)
         file:write("    " .. typeName .. " = \"" .. typeName .. "\",\n")
     end
     file:write("}\n\n")
+
+    file:write("-- Connection points that can't be connected can be walled off if you have \"dead-end\" prefabs with a\n");
+    file:write("-- matching connection type. Use register_prefabType_as_deadend() to specify which prefabs are dead-ends.\n")
+    file:write("--structGenLib.register_prefabType_as_deadend(prefabType.deadend)\n\n")
+    file:write("-- Use register_prefabType_as_decoration() to specify which prefabs are decorations.\n")
+    file:write("--structGenLib.register_prefabType_as_decoration(prefabType.furniture)\n\n")
 end
 
 local function writeConnectionPoints(file, connectionPoints, isDecorations)

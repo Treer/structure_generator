@@ -58,20 +58,38 @@ structGenLib.register_prefab({
 });
 
 structGenLib.register_prefab({
-    name             = "hallway",
+    name             = "long hallway",
     size             = vector.new(7,5,5),
     type             = prefabType.hallway,
-    schematic        = "example_schematics/hallway.mts",
+    schematic        = "example_schematics/long_hallway.mts",
     connectionPoints = {{
             x = 0, y = 0, z = 2.5,
             type         = connectionType.doorway3x3,
             facing       = 3,
-            validPrefabs = prefabType.all -- this allow lists with probabilities, but "all" is easier for now
+            validPrefabs = {
+                [prefabType.hallwayJunction] = 2.5,  -- this is a weighted list, so hallwayJunction are most likely to occur at the end of a hallway
+                [prefabType.corner]          = 2,
+                ["hallway stairs"]           = 2,  -- prefab names can also be used in validPrefabs lists
+                [prefabType.hallway]         = 1,
+                [prefabType.room]            = 2,
+                [prefabType.chamberSmall]    = 1,
+                [prefabType.chamberMedium]   = 1,
+                [prefabType.chamberLarge]    = 1
+            }
         },{
             x = 7, y = 0, z = 2.5,
             type         = connectionType.doorway3x3,
             facing       = 1,
-            validPrefabs = prefabType.all
+            validPrefabs = {
+                [prefabType.hallwayJunction] = 2.5,
+                [prefabType.corner]          = 2,
+                ["hallway stairs"]           = 2,
+                [prefabType.hallway]         = 1,
+                [prefabType.room]            = 2,
+                [prefabType.chamberSmall]    = 1,
+                [prefabType.chamberMedium]   = 1,
+                [prefabType.chamberLarge]    = 1
+            }
         }
     }
 });
@@ -336,12 +354,30 @@ structGenLib.register_prefab({
             x = 0, y = 0, z = 2.5,
             type         = connectionType.doorway3x3,
             facing       = 3,
-            validPrefabs = prefabType.all
+            validPrefabs = {
+                ["hallway stairs"]           = 0.7,
+                [prefabType.hallway]         = 1.5,
+                [prefabType.hallwayJunction] = 1,
+                [prefabType.corner]          = 1,
+                [prefabType.room]            = 2,
+                [prefabType.chamberSmall]    = 1,
+                [prefabType.chamberMedium]   = 1,
+                [prefabType.chamberLarge]    = 1
+            }
         },{
             x = 9, y = 9, z = 2.5,
             type         = connectionType.doorway3x3,
             facing       = 1,
-            validPrefabs = prefabType.all
+            validPrefabs = {
+                ["hallway stairs"]           = 0.7,
+                [prefabType.hallway]         = 1.5,
+                [prefabType.hallwayJunction] = 1,
+                [prefabType.corner]          = 1,
+                [prefabType.room]            = 2,
+                [prefabType.chamberSmall]    = 1,
+                [prefabType.chamberMedium]   = 1,
+                [prefabType.chamberLarge]    = 1
+            }
         }
     }
 });
@@ -360,4 +396,37 @@ structGenLib.register_prefab({
     type             = prefabType.treasure1,
     schematic        = "example_schematics/treasure_chest.mts",
     connectionPoints = {}
+});
+
+structGenLib.register_prefab({
+    name             = "covered way",
+    size             = vector.new(9,10,5),
+    type             = prefabType.hallway,
+    schematic        = "example_schematics/covered_way.mts",
+    connectionPoints = {{
+            x = 0, y = 5, z = 2.5,
+            type         = connectionType.doorway3x3,
+            facing       = 3,
+            validPrefabs = {
+                ["half hallway"]     = 10,  -- this is a weighted list, so half-hallway's are most likely to connect to covered ways
+                ["covered way"]      = 3,
+                ["hallway stairs"]   = 2,
+                [prefabType.room]    = 2,   -- prefab types can also be used in validPrefabs lists
+                [prefabType.chamberMedium] = 1,
+                [prefabType.hallway] = 1
+            }
+        },{
+            x = 9, y = 5, z = 2.5,
+            type         = connectionType.doorway3x3,
+            facing       = 1,
+            validPrefabs = {
+                ["half hallway"]     = 10,  -- this is a weighted list, so half-hallway's are most likely to connect to covered ways
+                ["covered way"]      = 3,
+                ["hallway stairs"]   = 2,
+                [prefabType.room]    = 2,   -- prefab types can also be used in validPrefabs lists
+                [prefabType.chamberMedium] = 1,
+                [prefabType.hallway] = 1
+            }
+        }
+    }
 });
