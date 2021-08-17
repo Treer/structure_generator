@@ -285,6 +285,7 @@ local function normalizeValidPrefabs(validPrefabs, isForDecorationPoint)
         return expandPrefabNameOrType(validPrefabs, isForDecorationPoint)
 
     elseif type(validPrefabs) == 'table' then
+        local excludedPrefabs = {}
         -- expand out any prefab types
         for key, value in pairs(validPrefabs) do
             if type(value) == 'string' then
@@ -295,10 +296,18 @@ local function normalizeValidPrefabs(validPrefabs, isForDecorationPoint)
             elseif type(value) == 'number' then
                 -- this item in the table is a probability list item, but the key might be either a prefab name or prefab type
                 for name, weight in pairs(expandPrefabNameOrType(key, isForDecorationPoint, value)) do
+                    if weight == 0 then table.insert(excludedPrefabs, name) end
                     result[name] = (result[name] or 0) + weight
                 end
             end
         end
+
+        for _, name in ipairs(excludedPrefabs) do
+            -- specifying a probability of zero excludes the prefab and overrides any weight it
+            -- may have gained from membership in otherwise included groups
+            result[name] = nil
+        end
+
         debug("## expanded probability table: %s", result)
     end
     return result;

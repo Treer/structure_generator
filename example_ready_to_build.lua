@@ -103,12 +103,12 @@ structGenLib.register_prefab({
             x = 0, y = 0, z = 2.5,
             type         = connectionType.doorway3x3,
             facing       = 3,
-            validPrefabs = prefabType.all
+            validPrefabs = { [prefabType.all] = 1,  [prefabType.deadend] = 0 } -- allow anything except dead-ends
         },{
             x = 3, y = 0, z = 2.5,
             type         = connectionType.doorway3x3,
             facing       = 1,
-            validPrefabs = prefabType.all
+            validPrefabs = { [prefabType.all] = 1,  [prefabType.deadend] = 0 } -- allow anything except dead-ends
         }
     }
 });
@@ -122,17 +122,17 @@ structGenLib.register_prefab({
             x = 0, y = 0, z = 2.5,
             type         = connectionType.doorway3x3,
             facing       = 3,
-            validPrefabs = prefabType.all
+            validPrefabs = { [prefabType.all] = 1,  [prefabType.deadend] = 0 } -- allow anything except dead-ends
         },{
             x = 2.5, y = 0, z = 0,
             type         = connectionType.doorway3x3,
             facing       = 2,
-            validPrefabs = prefabType.all
+            validPrefabs = { [prefabType.all] = 1,  [prefabType.deadend] = 0 } -- allow anything except dead-ends
         },{
             x = 2.5, y = 0, z = 5,
             type         = connectionType.doorway3x3,
             facing       = 0,
-            validPrefabs = prefabType.all
+            validPrefabs = { [prefabType.all] = 1,  [prefabType.deadend] = 0 } -- allow anything except dead-ends
         }
     }
 });
@@ -146,22 +146,22 @@ structGenLib.register_prefab({
             x = 0, y = 0, z = 2.5,
             type         = connectionType.doorway3x3,
             facing       = 3,
-            validPrefabs = prefabType.all
+            validPrefabs = { [prefabType.all] = 1,  [prefabType.deadend] = 0 } -- allow anything except dead-ends
         },{
             x = 2.5, y = 0, z = 0,
             type         = connectionType.doorway3x3,
             facing       = 2,
-            validPrefabs = prefabType.all
+            validPrefabs = { [prefabType.all] = 1,  [prefabType.deadend] = 0 } -- allow anything except dead-ends
         },{
             x = 2.5, y = 0, z = 5,
             type         = connectionType.doorway3x3,
             facing       = 0,
-            validPrefabs = prefabType.all
+            validPrefabs = { [prefabType.all] = 1,  [prefabType.deadend] = 0 } -- allow anything except dead-ends
         },{
             x = 5, y = 0, z = 2.5,
             type         = connectionType.doorway3x3,
             facing       = 1,
-            validPrefabs = prefabType.all
+            validPrefabs = { [prefabType.all] = 1,  [prefabType.deadend] = 0 } -- allow anything except dead-ends
         }
     }
 });
