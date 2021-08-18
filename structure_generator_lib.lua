@@ -148,7 +148,7 @@ local function addToCollisionTable(minp, maxp)
 end
 
 local function testForCollision(minp, maxp)
-    -- nothing fancy to see here like oct-trees or BSPs, in this household we use brute force
+    -- nothing fancy to see here like oct-trees or BSPs, in this house we use brute force
     for _, box in ipairs(structGenLib.collisionTable) do
         local bminp, bmaxp = box.minp, box.maxp
         local separated = bminp.x > maxp.x or bminp.y > maxp.y or bminp.z > maxp.z or
@@ -502,19 +502,19 @@ placePrefab = function(prefabName, pos, direction, recursionLimit)
     recursionLimit = recursionLimit - 1
     local prefab = copyAndRotatePrefab(structGenLib.registered_prefabs[prefabName], direction)
 
-    minetest.place_schematic(
-        pos,
-        modPath .. DIR_DELIM .. prefab.schematic,
-        direction * 90,
-        {},  -- node replacements
-        true -- force_placement
-    )
+    if prefab.schematic ~= nil then
+        minetest.place_schematic(
+            pos,
+            modPath .. DIR_DELIM .. prefab.schematic,
+            direction * 90,
+            {},  -- node replacements
+            true -- force_placement
+        )
+    end
 
     if prefabTypeCanCollide(prefab.type) then
         local pos2 = vector.add(pos, vector.subtract(prefab.size, 1))
         addToCollisionTable(pos, pos2)
-        --minetest.set_node(pos,  {name="default:mese"}) -- debug marker
-        --minetest.set_node(pos2, {name="default:meselamp"})
     end
 
     placeConnections(prefab, pos, false, recursionLimit) -- connectionPoints
