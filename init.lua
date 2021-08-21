@@ -3,7 +3,7 @@
 --   1 = print(...)
 --   2 = minetest.chat_send_all(...)
 --   4 = minetest.log("info", ...)
-local DEBUG_FLAGS = 6
+local DEBUG_FLAGS = 0
 
 
 

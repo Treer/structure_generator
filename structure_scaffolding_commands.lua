@@ -265,7 +265,7 @@ local function createBoundingBoxes(playerName, startPos)
                     local meta = minetest.get_meta(signlocation)
                     meta:set_string("template_name", prefab.name)
                     meta:set_string("template_size", minetest.pos_to_string(prefab.size))
-                    meta:set_string("template_type", prefab.type)
+                    meta:set_string("template_tags", minetest.serialize(prefab.typeTags))
 
 
                     local success = true
@@ -469,27 +469,33 @@ local function writeBoilerplate(file, prefabList)
     file:write("    inventSomeConnectionTypes = \"inventSomeConnectionTypes\"\n")
     file:write("}\n\n")
 
-    local prefabEnums = {}
+    file:write("local prefabTag = {\n")
+    file:write("    -- \"none\", \"all\", \"deadend\" and \"decoration\" are reserved tags that the engine\n")
+    file:write("    -- ascribes meaning to, the other tag name can be anything you like.\n")
+    file:write("    none       = \"none\",\n")
+    file:write("    all        = \"all\",\n")
+    file:write("    deadend    = \"deadend\",    -- marks the prefab as being a way to cover up connection-points that won't be connected\n")
+    file:write("    decoration = \"decoration\", -- marks the prefab as being a decoration\n\n")
+
+    file:write("    -- user tags\n")
+
+    local prefabTagList = {}
     for _, prefab in pairs(prefabList) do
-        if prefabEnums[prefab.type] == nil then
-            prefabEnums[prefab.type] = true
+        for k,v in pairs(prefab.typeTags) do
+            prefabTagList[k] = true
         end
     end
-
-    file:write("local prefabType = {\n")
-    file:write("    none = \"none\", -- built-in enum\n")
-    file:write("    all  = \"all\",  -- built-in enum\n\n")
-
-    for typeName,_ in pairs(prefabEnums) do
-        file:write("    " .. typeName .. " = \"" .. typeName .. "\",\n")
+    for k,v in pairs(structure_generator.lib.reservedPrefabTag) do
+        prefabTagList[k] = nil -- remove any built-in tags from the list of user tags
+    end
+    for tag,_ in pairs(prefabTagList) do
+        file:write("    " .. tag .. " = \"" .. tag .. "\",\n")
     end
     file:write("}\n\n")
 
     file:write("-- Connection points that can't be connected can be walled off if you have \"dead-end\" prefabs with a\n");
-    file:write("-- matching connection type. Use register_prefabType_as_deadend() to specify which prefabs are dead-ends.\n")
-    file:write("--structGenLib.register_prefabType_as_deadend(prefabType.deadend)\n\n")
-    file:write("-- Use register_prefabType_as_decoration() to specify which prefabs are decorations.\n")
-    file:write("--structGenLib.register_prefabType_as_decoration(prefabType.furniture)\n\n")
+    file:write("-- matching connection type. Include prefabTag.deadend in their typeTags to specify which prefabs are dead-ends.\n\n")
+    file:write("-- Include prefabTag.decoration in prefab typeTags to specify which prefabs are decorations.\n")
 end
 
 local function writeConnectionPoints(file, connectionPoints, isDecorations)
@@ -511,7 +517,7 @@ local function writeConnectionPoints(file, connectionPoints, isDecorations)
             file:write("            x = " .. point.x .. ", y = " .. point.y.. ", z = " .. point.z .. ",\n")
             file:write("            type         = connectionType.inventSomeConnectionTypes," .. "\n")
             file:write("            facing       = " .. point.facing .. ",\n")
-            file:write("            validPrefabs = prefabType.all" .. "\n")
+            file:write("            validPrefabs = prefabTag.all" .. "\n")
             --file:write("        verticalFacing = \"none\"," .. "\n")
             --file:write("        symmetry       = \"none\"," .. "\n") use registerSymmetricalConnectionType() instead
             file:write("        }")
@@ -532,11 +538,19 @@ local function savePrefabCodeTemplate(prefabList)
     for _, prefab in pairs(prefabList) do
         local connectionPoints, decorationPoints = findConnectionPoints(prefab)
 
+        local typeTagsString = ""
+        local first = true
+        for k,v in pairs(prefab.typeTags) do
+            if not first then typeTagsString = typeTagsString .. ", " end
+            first = false
+            typeTagsString = typeTagsString .. "prefabTag." .. k
+        end
+
         file:write("\n")
         file:write("structGenLib.register_prefab({" .. "\n")
         file:write("    name             = \"" .. prefab.name .. "\",\n")
         file:write("    size             = vector.new" .. minetest.pos_to_string(prefab.size) .. ",\n")
-        file:write("    type             = prefabType." .. prefab.type .. ",\n")
+        file:write("    typeTags         = { " .. typeTagsString .. " },\n")
         file:write("    schematic        = \"" .. sanitizeFilename(prefab.name) .. ".mts\",\n")
 
         writeConnectionPoints(file, connectionPoints, false)
@@ -577,17 +591,21 @@ function findPrefabsOnMap(startPos, callback, callbackParam)
             local meta = minetest.get_meta(signlocation)
             local template_name = meta:get_string("template_name")
             local template_size = minetest.string_to_pos(meta:get_string("template_size"))
-            local template_type = meta:get_string("template_type")
+            local template_tags = minetest.deserialize(meta:get_string("template_tags"), true) or {}
+            local template_type = meta:get_string("template_type")                        -- deprecated, use tags
+            if string.len(template_type) > 0 then template_tags[template_type] = true end -- deprecated, use tags
+
             prefabFound = template_name ~= "" and template_size ~= nil
 
             if prefabFound then
-                local prefab =  {
-                    name = template_name,
-                    type = template_type,
-                    size = template_size,
-                    p1 = vector.new(pos),
-                    p2 = vector.add(pos, vector.add(template_size, -1))
-                }
+                local prefab = structure_generator.lib.PrefabScaffold.new(
+                    template_name,
+                    template_size,
+                    template_tags
+                )
+                prefab.p1 = vector.new(pos)
+                prefab.p2 = vector.add(pos, vector.add(template_size, -1))
+
                 table.insert(prefabList, prefab)
                 pos.z = pos.z + template_size.z + templateDistance
             end
