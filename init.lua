@@ -3,7 +3,7 @@
 --   1 = print(...)
 --   2 = minetest.chat_send_all(...)
 --   4 = minetest.log("info", ...)
-local DEBUG_FLAGS = 0
+local DEBUG_FLAGS = 6
 
 
 
@@ -45,9 +45,10 @@ function structure_generator.toString(arg)
             -- convert vectors to strings
             return minetest.pos_to_string(arg)
         else
+            local prefix = arg._className or ""
             -- convert tables to strings
             -- (calling function can use dump() if a multi-line listing is desired)
-            return string.gsub(dump(arg, ""), "\n", " ")
+            return prefix .. string.gsub(dump(arg, ""), "\n", " ")
         end
     else
         return tostring(arg)

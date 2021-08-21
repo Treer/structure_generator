@@ -20,9 +20,11 @@ _G[parentModNamespace].get_structure_generator_lib = function ()
     return structGenLib
 end
 
-local debug = function() end
+local debug           = function() end
+local convertToString = tostring
 if minetest.global_exists("structure_generator") then
-    debug = structure_generator.debug
+    debug           = structure_generator.debug
+    convertToString = structure_generator.toString
 
     if structure_generator.lib == nil then
         -- make this library available to the structure_templates_tool
@@ -59,9 +61,9 @@ local function tableCount(tbl)
 end
 
 -- size is not altered
--- rotation can equal 0, 1, 2, or 3, and is clockwise around the y axis BUT
+-- rotation can equal 0, 1, 2 or 3 (i.e. the lower 2 bits in a facedir), and is clockwise
+-- around the y axis BUT
 -- result is translated afterwards to match how schematics rotate without changing their minp
--- i.e. the lower 2 bits in a facedir
 local function rotatePoint(size, point, rotation)
     local xSize, zSize = size.x, size.z
     for _ = 1, rotation % 4 do
@@ -116,6 +118,188 @@ local function pickRandomElementFromArray(array)
     return array[index]
 end
 
+local function isNumber(variable)
+    return type(variable) == "number"
+end
+
+-- returns true if the variable is a vector/position
+-- differs from the structure_generator.isVector() in not caring whether the variable
+-- contains extra fields.
+local function isVectorTable(variable)
+    if type(variable) ~= "table" then
+        return false
+    end
+    return isNumber(variable.x) and isNumber(variable.y) and isNumber(variable.z)
+end
+
+local function isNonEmptyString(variable)
+    return type(variable) == "string" and string.len(variable) > 0
+end
+
+function stringFormat2(message, ...)
+	local args = {...}
+	local argCount = select("#", ...)
+
+	for i = 1, argCount do
+        args[i] = convertToString(args[i])
+	end
+
+	return string.format(message, unpack(args))
+end
+
+
+-- ===========================
+--             Classes
+-- ===========================
+-- I'm using classes to provide a authoritative definition of what fields/methods the tables
+-- should contain, and matching sanitization functions
+
+
+--=== ConnectionPoint ===--
+
+local ConnectionPoint = {_classname = "ConnectionPoint"}
+ConnectionPoint.__index = ConnectionPoint -- Make ConnectionPoint usable as a metatable by giving it an __index entry, and have that __index point to ConnectionPoint as the default table for any missing key/values
+local function _ConnectionPointConstructor(x, y, z, connectionType, facing, validPrefabs)
+	return setmetatable(
+        {x = x, y = y, z = z, type = connectionType, facing = facing, validPrefabs = validPrefabs},
+        ConnectionPoint
+    )
+end
+
+-- Either
+--   ConnectionPoint.new()
+--   ConnectionPoint.new(connectionPoint)
+--   ConnectionPoint.new(x, y, z, connectionType, facing, validPrefabs)
+function ConnectionPoint.new(a, b, c, d, e, f)
+    if a == nil then
+        return _ConnectionPointConstructor(0, 0, 0, "default", 0, {})
+    elseif a == ConnectionPoint then
+        error("Call ConnectionPoint.new() with a dot not a colon, i.e. not ConnectionPoint:new()")
+	elseif type(a) == "table" then
+		assert(
+            isNumber(a.x) and isNumber(a.y) and isNumber(a.z) and a.type and isNumber(a.facing) and a.validPrefabs,
+            stringFormat2("Invalid ConnectionPoint table passed to ConnectionPoint.new(): %s", a)
+        )
+		return _ConnectionPointConstructor(a.x, a.y, a.z, a.type, a.facing or 0, a.validPrefabs)
+	elseif isNumber(a) then
+		assert(
+            isNumber(b) and isNumber(c) and d and isNumber(e) and f,
+            stringFormat2("Invalid arguments passed to ConnectionPoint.new(%s, %s, %s, %s, %s, %s)", a, b, c, d, e, f)
+        )
+		return _ConnectionPointConstructor(a, b, c, d, e, f)
+    else
+        error("Invalid arguments passed to ConnectionPoint.new(?)")
+	end
+end
+
+function ConnectionPoint:clone()
+    if self == nil then error("Call connectionPoint:clone() with a colon not a dot, i.e. not connectionPoint.clone()") end
+    local result = ConnectionPoint.new(self)
+    for k,v in pairs(self) do result[k] = v end -- just in case there were any other entries in the ConnectionPoint table
+    return result
+end
+
+-- prefabSize is not altered
+-- rotation can equal 0, 1, 2 or 3 (i.e. the lower 2 bits in a facedir), and is clockwise
+-- around the y axis BUT
+-- new location is translated afterwards to match how schematics rotate without changing their minp
+-- (thus the need for prefabSize)
+function ConnectionPoint:rotate(prefabSize, rotation)
+    rotatePoint(prefabSize, self, rotation)
+    self.facing = (self.facing + rotation) % 4
+end
+
+
+--=== PrefabScaffold ===--
+
+local PrefabScaffold = {_classname = "PrefabScaffold"}
+PrefabScaffold.__index = PrefabScaffold -- Make PrefabScaffold usable as a metatable by giving it an __index entry, and have that __index point to PrefabScaffold as the default table for any missing key/values
+local function _PrefabScaffoldConstructor(name, size, optional_typeTags)
+    local typeTags = {}
+    if type(optional_typeTags) == 'table' then
+        typeTags = optional_typeTags -- optional_typeTags must be an array rather than a keyvalue pair
+    elseif optional_typeTags ~= nil then
+        table.insert(typeTags, optional_typeTags)
+    end
+	return setmetatable({name = name, size = size, typeTags = typeTags}, PrefabScaffold)
+end
+
+-- Either
+--   PrefabScaffold.new(prefabScaffold)
+--   PrefabScaffold.new(name, size, optional_typeTags)
+function PrefabScaffold.new(a, b, c)
+    if a == nil then
+        error("No argument passed to PrefabScaffold.new()")
+    elseif a == PrefabScaffold then
+        error("Call PrefabScaffold.new() with a dot not a colon, i.e. not PrefabScaffold:new()")
+	elseif type(a) == "table" then
+		assert(
+            isNonEmptyString(a.name) and isVectorTable(a.size),
+            stringFormat2("Invalid PrefabScaffold table passed to PrefabScaffold.new(): %s", a)
+        )
+		return _PrefabScaffoldConstructor(a.name, a.size, a.typeTags or a.type) -- PrefabScaffold.type is deprecated and replaced by typeTags
+	elseif isNonEmptyString(a) then
+		assert(isVectorTable(b), stringFormat2("Invalid size passed to PrefabScaffold.new(%s, %s, %s)", a, b, c)
+        )
+		return _PrefabScaffoldConstructor(a, b, c)
+    else
+        error("Invalid arguments passed to PrefabScaffold.new(?)")
+	end
+end
+
+--=== Prefab ===--
+--
+-- Prefab is a subclass of PrefabScaffold, as it has more requirements
+
+local Prefab = {_classname = "Prefab"}
+Prefab.__index = PrefabScaffold --  Make Prefab usable as the metatable, but have it use PrefabScaffold as its superclass metatable for any key/values Prefab is missing
+local function _PrefabConstructor(name, size, optional_typeTags, optional_schematic, connectionPoints, optional_decorationPoints)
+    local prefab = _PrefabScaffoldConstructor(name, size, optional_typeTags)
+
+    -- force the connection points and decoration points to be instances of ConnectionPoint
+    prefab.connectionPoints = {}
+    for _, connectionPointDef in ipairs(connectionPoints) do
+        table.insert(prefab.connectionPoints, ConnectionPoint.new(connectionPointDef))
+    end
+
+    prefab.decorationPoints = {}
+    for _, connectionPointDef in ipairs(optional_decorationPoints or {}) do
+        table.insert(prefab.decorationPoints, ConnectionPoint.new(connectionPointDef))
+    end
+
+    return setmetatable(prefab, Prefab)
+end
+
+-- Either
+--   Prefab.new(prefab)
+--   Prefab.new(name, size, optional_typeTags, optional_schematic, connectionPoints, optional_decorationPoints)
+function Prefab.new(a, b, c, d, e, f)
+    if a == nil then
+        error("No argument passed to Prefab.new()")
+    elseif a == Prefab then
+        error("Call Prefab.new() with a dot not a colon, i.e. not Prefab:new()")
+	elseif type(a) == "table" then
+		assert(
+            isNonEmptyString(a.name) and isVectorTable(a.size) and type(a.connectionPoints) == "table",
+            stringFormat2("Invalid Prefab table passed to Prefab.new(): %s", a)
+        )
+         -- NB: Prefab.type is deprecated and replaced by typeTags
+		return _PrefabConstructor(a.name, a.size, a.typeTags or a.type, a.schematic, a.connectionPoints, a.decorationPoints)
+	elseif isNonEmptyString(a) then
+		assert(
+            isVectorTable(b) and type(e) == "table",
+            stringFormat2("Invalid size or connectionPoints table passed to Prefab.new(%s, %s, %s, %s, %s, %s)", a, b, c, d, e, f)
+        )
+		return _PrefabConstructor(a, b, c, d, e, f)
+    else
+        error("Invalid arguments passed to Prefab.new(?)")
+	end
+end
+
+-- Expose the classes to the public API
+structGenLib.ConnectionPoint = ConnectionPoint
+structGenLib.PrefabScaffold  = PrefabScaffold
+structGenLib.Prefab          = Prefab
 
 -- ===========================
 --             API
@@ -177,7 +361,7 @@ function structGenLib.register_prefabType_as_deadend(prefab_type_enum)
     structGenLib.registered_deadend_types[prefab_type_enum] = true
 
     if type(prefab_type_enum) ~= 'string' and type(prefab_type_enum) ~= 'number' then
-        error("Argument passed to register_prefab_type_as_deadend() is not a prefab type enum: " .. structure_generator.toString(prefab_type_enum), 0)
+        error("Argument passed to register_prefab_type_as_deadend() is not a prefab type enum: " .. convertToString(prefab_type_enum), 0)
     end
 end
 
@@ -186,34 +370,43 @@ function structGenLib.register_prefabType_as_decoration(prefab_type_enum)
     structGenLib.registered_decoration_types[prefab_type_enum] = true
 
     if type(prefab_type_enum) ~= 'string' and type(prefab_type_enum) ~= 'number' then
-        error("Argument passed to register_prefab_type_as_decoration() is not a prefab type enum" .. structure_generator.toString(prefab_type_enum), 0)
+        error("Argument passed to register_prefab_type_as_decoration() is not a prefab type enum" .. convertToString(prefab_type_enum), 0)
     end
 end
 
 function structGenLib.register_prefab(name, prefab_definition_table)
 
     -- if the first param is the prefab_definition_table and the name is in the table then that's ok too
-    if type(name) == 'table' and type(name.name) == 'string' then
+    if type(name) == 'table' and isNonEmptyString(name.name) then
         prefab_definition_table = name
         name = prefab_definition_table.name
     end
 
-    if type(prefab_definition_table) ~= 'table' or type(prefab_definition_table.type) ~= 'string' then
-        error("Argument passed to register_prefab() is not a prefab definition table: " .. structure_generator.toString(prefab_definition_table), 0)
+    if type(prefab_definition_table) ~= 'table' then
+        error("Argument passed to register_prefab() is not a prefab definition table: " .. convertToString(prefab_definition_table), 0)
     end
 
     prefab_definition_table.name = name
-    structGenLib.registered_prefabs[name] = prefab_definition_table
-    table.insert(structGenLib.registrationOrdered_prefabs, prefab_definition_table)
+    local prefab
+    if not pcall(function() prefab = Prefab.new(prefab_definition_table) end) then
+        -- prefab_definition_table didn't meet the criteria for a fully specified Prefab, but
+        -- perhaps is just a PrefabScaffold
+        prefab = PrefabScaffold.new(prefab_definition_table)
+    end
+
+    structGenLib.registered_prefabs[name] = prefab
+    table.insert(structGenLib.registrationOrdered_prefabs, prefab)
 end
 
 -- size and pointsList are not changed, a new list is returned
 local function rotateConnectionPoints(size, pointsList, direction)
     local result = {}
     for _,connectionPoint in pairs(pointsList or {}) do
-        local newPoint = copyTable(connectionPoint)
-        rotatePoint(size, newPoint, direction)
-        newPoint.facing = (newPoint.facing + direction) % 4
+        local newPoint = ConnectionPoint.new(connectionPoint)
+        newPoint:rotate(size, direction)
+        --local newPoint = copyTable(connectionPoint)
+        --rotatePoint(size, newPoint, direction)
+        --newPoint.facing = (newPoint.facing + direction) % 4
         table.insert(result, newPoint)
     end
     return result
