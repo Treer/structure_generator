@@ -1,14 +1,15 @@
 local structGenLib = my_mod_namespace.get_structure_generator_lib()
 
 
-local prefabType = {
-	-- "none" and "all" are special strings that the engine understands
-	-- the other enums can be anything you like.
+local prefabTag = {
+	-- "none", "all", "deadend" and "decoration" are reserved tags that the engine
+	-- ascribes meaning to, the other tag name can be anything you like.
 	none            = "none",
 	all             = "all",
+	deadend         = "deadend",    -- marks the prefab as being a way to cover-over a connection-point
+	decoration      = "decoration", -- marks the prefab as being a decoration
 
 	-- rooms
-	deadend         = "deadend",
 	hallway         = "hallway",
 	hallwayJunction = "hallwayJunction",
 	corner          = "corner",
@@ -26,108 +27,93 @@ local prefabType = {
 	treasure2       = "treasure2"
 }
 
-structGenLib.register_prefabType_as_deadend(prefabType.deadend)
-structGenLib.register_prefabType_as_decoration(prefabType.furniture)
-structGenLib.register_prefabType_as_decoration(prefabType.centerpiece)
-structGenLib.register_prefabType_as_decoration(prefabType.pillar)
-structGenLib.register_prefabType_as_decoration(prefabType.treasure1)
-structGenLib.register_prefabType_as_decoration(prefabType.treasure2)
-
-
-local connectionType = {
-	doorway1x2  = "doorway1x2",
-	doorway2x3  = "doorway2x3",
-	vent1x1     = "vent1x1",
-	openRoom5x3 = "openRoom5x3",
-	stairwell   = "stairwell"
-}
 
 structGenLib.register_prefab({
-	name = "walled-off hallway",
-	size = vector.new(1, 5, 5),
-	type = prefabType.deadend
+	name     = "walled-off hallway",
+	size     = vector.new(1, 5, 5),
+	typeTags = prefabTag.deadend
 });
 
 structGenLib.register_prefab({
-	name = "long hallway", -- calling it "long hallway" since there's already a prefabType using "hallway", and keeping the two distinct is handy later as we can refer to either one in validPrefabs tables.
-	size = vector.new(7, 5, 5),
-	type = prefabType.hallway
+	name     = "long hallway", -- calling it "long hallway" since there's already a prefabTag using "hallway", and keeping the two distinct is handy later as we can refer to either one in validPrefabs tables.
+	size     = vector.new(7, 5, 5),
+	typeTags = prefabTag.hallway
 });
 
 structGenLib.register_prefab({
-	name = "half hallway",
-	size = vector.new(3, 5, 5),
-	type = prefabType.hallway
+	name     = "half hallway",
+	size     = vector.new(3, 5, 5),
+	typeTags = prefabTag.hallway
 });
 
 structGenLib.register_prefab({
-	name = "hallway t-junction",
-	size = vector.new(5, 5, 5),
-	type = prefabType.hallwayJunction
+	name     = "hallway t-junction",
+	size     = vector.new(5, 5, 5),
+	typeTags = prefabTag.hallwayJunction
 });
 
 structGenLib.register_prefab({
-	name = "hallway intersection",
-	size = vector.new(5, 5, 5),
-	type = prefabType.hallwayJunction
+	name     = "hallway intersection",
+	size     = vector.new(5, 5, 5),
+	typeTags = prefabTag.hallwayJunction
 });
 
 structGenLib.register_prefab({
-	name = "hallway corner",
-	size = vector.new(5, 5, 5),
-	type = prefabType.corner
+	name     = "hallway corner",
+	size     = vector.new(5, 5, 5),
+	typeTags = prefabTag.corner
 });
 
 structGenLib.register_prefab({
-	name = "small room1",
-	size = vector.new(10, 7, 10),
-	type = prefabType.room
+	name     = "small room1",
+	size     = vector.new(10, 7, 10),
+	typeTags = prefabTag.room
 });
 
 structGenLib.register_prefab({
-	name = "small room2",
-	size = vector.new(10, 7, 10),
-	type = prefabType.room
+	name     = "small room2",
+	size     = vector.new(10, 7, 10),
+	typeTags = prefabTag.room
 });
 
 structGenLib.register_prefab({
-	name = "medium room1",
-	size = vector.new(15, 7, 10),
-	type = prefabType.room
+	name     = "medium room1",
+	size     = vector.new(15, 7, 10),
+	typeTags = prefabTag.room
 });
 
 structGenLib.register_prefab({
-	name = "small chamber1",
-	size = vector.new(5, 7, 5),
-	type = prefabType.chamberSmall
+	name     = "small chamber1",
+	size     = vector.new(5, 7, 5),
+	typeTags = prefabTag.chamberSmall
 });
 
 structGenLib.register_prefab({
-	name = "medium chamber1",
-	size = vector.new(10, 7, 10),
-	type = prefabType.chamberMedium
+	name     = "medium chamber1",
+	size     = vector.new(10, 7, 10),
+	typeTags = prefabTag.chamberMedium
 });
 
 structGenLib.register_prefab({
-	name = "hallway stairs",
-	size = vector.new(9, 14, 5),
-	type = prefabType.hallway
+	name     = "hallway stairs",
+	size     = vector.new(9, 14, 5),
+	typeTags = prefabTag.hallway
 });
 
 structGenLib.register_prefab({
-	name = "pillar1x1",
-	size = vector.new(1, 5, 1),
-	type = prefabType.pillar
+	name     = "pillar1x1",
+	size     = vector.new(1, 5, 1),
+	typeTags = { prefabTag.decoration, prefabTag.pillar }
 });
 
 structGenLib.register_prefab({
-	name = "treasure chest",
-	size = vector.new(1, 2, 1),
-	type = prefabType.treasure1
+	name     = "treasure chest",
+	size     = vector.new(1, 2, 1),
+	typeTags = { prefabTag.decoration, prefabTag.treasure1 }
 });
 
 structGenLib.register_prefab({
-	name = "covered way",
-	size = vector.new(9, 10, 5),
-	type = prefabType.hallway
+	name     = "covered way",
+	size     = vector.new(9, 10, 5),
+	typeTags = prefabTag.hallway
 });

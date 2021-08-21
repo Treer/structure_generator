@@ -136,7 +136,7 @@ local function isNonEmptyString(variable)
     return type(variable) == "string" and string.len(variable) > 0
 end
 
-function stringFormat2(message, ...)
+local function stringFormat2(message, ...)
 	local args = {...}
 	local argCount = select("#", ...)
 
@@ -147,6 +147,23 @@ function stringFormat2(message, ...)
 	return string.format(message, unpack(args))
 end
 
+local function toHashset(arrayOrValue)
+    local result = {}
+    if type(arrayOrValue) == "table" then
+        for k,v in pairs(arrayOrValue) do
+            if v and type(v) == "boolean" then
+                -- this entry is already in a Hashset form
+                result[k] = true
+            else
+                -- this entry is in array form, so use the value rather than the key
+                result[v] = true
+            end
+        end
+    elseif arrayOrValue ~= nil then
+        result[arrayOrValue] = true
+    end
+    return result
+end
 
 -- ===========================
 --             Classes
@@ -205,8 +222,10 @@ end
 -- new location is translated afterwards to match how schematics rotate without changing their minp
 -- (thus the need for prefabSize)
 function ConnectionPoint:rotate(prefabSize, rotation)
+    if self == nil then error("Call connectionPoint:rotate() with a colon not a dot, i.e. not connectionPoint.rotate()") end
     rotatePoint(prefabSize, self, rotation)
     self.facing = (self.facing + rotation) % 4
+    return self
 end
 
 
@@ -215,13 +234,7 @@ end
 local PrefabScaffold = {_classname = "PrefabScaffold"}
 PrefabScaffold.__index = PrefabScaffold -- Make PrefabScaffold usable as a metatable by giving it an __index entry, and have that __index point to PrefabScaffold as the default table for any missing key/values
 local function _PrefabScaffoldConstructor(name, size, optional_typeTags)
-    local typeTags = {}
-    if type(optional_typeTags) == 'table' then
-        typeTags = optional_typeTags -- optional_typeTags must be an array rather than a keyvalue pair
-    elseif optional_typeTags ~= nil then
-        table.insert(typeTags, optional_typeTags)
-    end
-	return setmetatable({name = name, size = size, typeTags = typeTags}, PrefabScaffold)
+	return setmetatable({name = name, size = vector.new(size), typeTags = toHashset(optional_typeTags)}, PrefabScaffold)
 end
 
 -- Either
@@ -247,14 +260,45 @@ function PrefabScaffold.new(a, b, c)
 	end
 end
 
+-- returns true if the prefab is tagged as a deadend
+function PrefabScaffold:isDeadEnd()
+    if self == nil then error("Call prefab:isDeadEnd() with a colon not a dot, i.e. not prefab.isDeadEnd()") end
+    return self.typeTags[structGenLib.reservedPrefabTag.deadend] == true
+end
+
+-- returns true if the prefab is tagged as a decoration
+function PrefabScaffold:isDecoration()
+    if self == nil then error("Call prefab:isDecoration() with a colon not a dot, i.e. not prefab.isDecoration()") end
+    return self.typeTags[structGenLib.reservedPrefabTag.decoration] == true
+end
+
+function PrefabScaffold:hasTag(tag)
+    if self == nil then error("Call prefab:hasTag() with a colon not a dot, i.e. not prefab.hasTag()") end
+    if type(tag) ~= "string" then debug("!!!WARNING!!! Non-string tag in use, this might mean a bug: %s", tag) end
+    return self.typeTags[tag] == true
+end
+
+-- decoration and deadend prefabs are always placed, and are excluded from the collision table
+function PrefabScaffold:canCollide()
+    if self == nil then error("Call prefab:canCollide() with a colon not a dot, i.e. not prefab.canCollide()") end
+    return not (self:isDecoration() or self:isDeadEnd())
+end
+
+function PrefabScaffold:clone()
+    error("PrefabScaffold:clone() not implemented, perhaps you meant to have instantiated a Prefab for " .. (self.name or "<nil>") .. "?")
+end
+
+
 --=== Prefab ===--
 --
 -- Prefab is a subclass of PrefabScaffold, as it has more requirements
 
 local Prefab = {_classname = "Prefab"}
-Prefab.__index = PrefabScaffold --  Make Prefab usable as the metatable, but have it use PrefabScaffold as its superclass metatable for any key/values Prefab is missing
+Prefab.__index = Prefab              --  Make Prefab usable as the metatable...
+setmetatable(Prefab, PrefabScaffold) --  but have it use PrefabScaffold as its superclass metatable for any key/values Prefab is missing
 local function _PrefabConstructor(name, size, optional_typeTags, optional_schematic, connectionPoints, optional_decorationPoints)
     local prefab = _PrefabScaffoldConstructor(name, size, optional_typeTags)
+    prefab.schematic = optional_schematic
 
     -- force the connection points and decoration points to be instances of ConnectionPoint
     prefab.connectionPoints = {}
@@ -296,6 +340,49 @@ function Prefab.new(a, b, c, d, e, f)
 	end
 end
 
+
+function Prefab:clone()
+    if self == nil then error("Call prefab:clone() with a colon not a dot, i.e. not prefab.clone()") end
+
+    local result = Prefab.new(self.name, self.size, self.typeTags, self.schematic, {}, {})
+    for k,v in pairs(self) do
+         -- just in case there were any other entries in the Prefab table, like event callback
+        if result[k] == nil then result[k] = v end
+    end
+
+    -- clone all the connectionPoints and decorationPoints so they can be altered (e.g. rotated) without affecting the original
+    result.connectionPoints = {}
+    for _,point in ipairs(self.connectionPoints or {}) do
+        table.insert(result.connectionPoints, point:clone())
+    end
+    result.decorationPoints = {}
+    for _,point in ipairs(self.decorationPoints or {}) do
+        table.insert(result.decorationPoints, point:clone())
+    end
+
+    return result
+end
+
+
+-- rotation can equal 0, 1, 2 or 3 (i.e. the lower 2 bits in a facedir), and is clockwise around the y axis
+function Prefab:rotate(rotation)
+    if self == nil then error("Call prefab:rotate() with a colon not a dot, i.e. not prefab.rotate()") end
+
+    if rotation > 0 then
+        for _,point in ipairs(self.connectionPoints or {}) do point:rotate(self.size, rotation) end
+        for _,point in ipairs(self.decorationPoints or {}) do point:rotate(self.size, rotation) end
+
+        if (rotation % 2) == 1 then
+            -- x size and z size will have switched
+            local original_x = self.size.x
+            self.size.x = self.size.z
+            self.size.z = original_x
+        end
+    end
+    return self
+end
+
+
 -- Expose the classes to the public API
 structGenLib.ConnectionPoint = ConnectionPoint
 structGenLib.PrefabScaffold  = PrefabScaffold
@@ -309,11 +396,24 @@ local modPath = minetest.get_modpath(minetest.get_current_modname())
 
 local placePrefab         -- the placePrefab(prefabName, pos, direction, recursionLimit) function will be assigned to this var
 
+-- Don't use the following predefined tags as prefab names
+local reservedPrefabTag = {
+	none       = "none",
+	all        = "all",
+
+    -- 'dead-end' prefabs are used to wall-off a connection point, and will be fallen back on if
+    -- other prefabs that were compatible with the connection point failed their validation check.
+    -- (i.e. if they intersected with already-placed prefabs), or if the recursion limit is reached.
+    deadend    = "deadend",
+
+    -- decoration prefabs are allowed to intersect room prefabs
+    decoration = "decoration"
+}
+structGenLib.reservedPrefabTag = reservedPrefabTag -- so earlier code in this file can reference it
+
 function structGenLib.clear()
     structGenLib.registered_prefabs          = {}
     structGenLib.registrationOrdered_prefabs = {} -- array of prefab tables in order of registration
-    structGenLib.registered_deadend_types    = {}
-    structGenLib.registered_decoration_types = {}
     structGenLib.deadendPrefabNamesByConnectionType = nil
 end
 structGenLib.clear() -- initialize the tables
@@ -353,28 +453,8 @@ local function testIfPointAlreadyConnected(pos)
     return structGenLib.connectedPoints[minetest.pos_to_string(pos)] ~= nil
 end
 
-
--- 'dead-end' prefabs are used to wall-off a connection point, and will be fallen back on if
--- other prefabs that were compatible with the connection point failed their validation check.
--- (i.e. if they intersected with already-placed prefabs)
-function structGenLib.register_prefabType_as_deadend(prefab_type_enum)
-    structGenLib.registered_deadend_types[prefab_type_enum] = true
-
-    if type(prefab_type_enum) ~= 'string' and type(prefab_type_enum) ~= 'number' then
-        error("Argument passed to register_prefab_type_as_deadend() is not a prefab type enum: " .. convertToString(prefab_type_enum), 0)
-    end
-end
-
--- decoration prefabs are allowed to intersect room prefabs
-function structGenLib.register_prefabType_as_decoration(prefab_type_enum)
-    structGenLib.registered_decoration_types[prefab_type_enum] = true
-
-    if type(prefab_type_enum) ~= 'string' and type(prefab_type_enum) ~= 'number' then
-        error("Argument passed to register_prefab_type_as_decoration() is not a prefab type enum" .. convertToString(prefab_type_enum), 0)
-    end
-end
-
 function structGenLib.register_prefab(name, prefab_definition_table)
+    --debug("register_prefab('%s', %s)", name, prefab_definition_table)
 
     -- if the first param is the prefab_definition_table and the name is in the table then that's ok too
     if type(name) == 'table' and isNonEmptyString(name.name) then
@@ -388,56 +468,27 @@ function structGenLib.register_prefab(name, prefab_definition_table)
 
     prefab_definition_table.name = name
     local prefab
-    if not pcall(function() prefab = Prefab.new(prefab_definition_table) end) then
+    local status, err = pcall(function() prefab = Prefab.new(prefab_definition_table) end)
+    if not status then
         -- prefab_definition_table didn't meet the criteria for a fully specified Prefab, but
         -- perhaps is just a PrefabScaffold
         prefab = PrefabScaffold.new(prefab_definition_table)
+        debug("was unable to instantiate %s as Prefab, so fell back to PrefabScaffold: %s", name, err)
     end
+    debug("register_prefab('%s', ...) registering %s", name, prefab)
 
     structGenLib.registered_prefabs[name] = prefab
     table.insert(structGenLib.registrationOrdered_prefabs, prefab)
 end
 
--- size and pointsList are not changed, a new list is returned
-local function rotateConnectionPoints(size, pointsList, direction)
-    local result = {}
-    for _,connectionPoint in pairs(pointsList or {}) do
-        local newPoint = ConnectionPoint.new(connectionPoint)
-        newPoint:rotate(size, direction)
-        --local newPoint = copyTable(connectionPoint)
-        --rotatePoint(size, newPoint, direction)
-        --newPoint.facing = (newPoint.facing + direction) % 4
-        table.insert(result, newPoint)
-    end
-    return result
-end
 
--- prefab isn't changed, a new prefab is returned
-local function copyAndRotatePrefab(prefab, direction)
-    local result = copyTable(prefab)
-
-    result.size = vector.new(prefab.size)
-    result.connectionPoints = rotateConnectionPoints(result.size, prefab.connectionPoints, direction)
-    result.decorationPoints = rotateConnectionPoints(result.size, prefab.decorationPoints, direction)
-
-    if (direction % 2) == 1 then
-        -- x size and z size will have switched
-        result.size.x = prefab.size.z
-        result.size.z = prefab.size.x
-    end
-
-    return result
-end
-
-
-
--- returns a probability list of prefabs that have a name or type that matches nameOrType
+-- returns a probability list of prefabs that have a name or tag that matches nameOrTag
 -- (All items will have the same weighting, which can be limited by specifying totalWeight)
 --
--- isForDecorationPoint provides some context in case nameOrType is "all"
-local function expandPrefabNameOrType(nameOrType, isForDecorationPoint, totalWeight)
+-- isForDecorationPoint provides some context in case nameOrTag is "all"
+local function expandPrefabNameOrTag(nameOrTag, isForDecorationPoint, totalWeight)
 
-    if nameOrType == "none" then
+    if nameOrTag == reservedPrefabTag.none then
         return {}
     end
 
@@ -447,12 +498,11 @@ local function expandPrefabNameOrType(nameOrType, isForDecorationPoint, totalWei
 
     for _, prefab in pairs(structGenLib.registered_prefabs) do
 
-        if nameOrType == "all" then
-            local prefabIsDecoration = structGenLib.registered_decoration_types[prefab.type] == true
-            includeAsMemberOfAll = (isForDecorationPoint == prefabIsDecoration) or (isForDecorationPoint == nil)
+        if nameOrTag == reservedPrefabTag.all then
+            includeAsMemberOfAll = (isForDecorationPoint == nil) or (isForDecorationPoint == prefab:isDecoration())
         end
 
-        if prefab.name == nameOrType or prefab.type == nameOrType or includeAsMemberOfAll then
+        if prefab.name == nameOrTag or prefab:hasTag(nameOrTag) or includeAsMemberOfAll then
             result[prefab.name] = 1
             itemCount = itemCount + 1
         end
@@ -475,7 +525,7 @@ local function normalizeValidPrefabs(validPrefabs, isForDecorationPoint)
 
     if type(validPrefabs) == 'string' then
         -- return all prefabs with a name or type that match the string
-        return expandPrefabNameOrType(validPrefabs, isForDecorationPoint)
+        return expandPrefabNameOrTag(validPrefabs, isForDecorationPoint)
 
     elseif type(validPrefabs) == 'table' then
         local excludedPrefabs = {}
@@ -483,12 +533,12 @@ local function normalizeValidPrefabs(validPrefabs, isForDecorationPoint)
         for key, value in pairs(validPrefabs) do
             if type(value) == 'string' then
                 -- this item in the table is a prefab name or prefab type
-                for name, weight in pairs(expandPrefabNameOrType(value, isForDecorationPoint)) do
+                for name, weight in pairs(expandPrefabNameOrTag(value, isForDecorationPoint)) do
                     result[name] = (result[name] or 0) + weight
                 end
             elseif type(value) == 'number' then
                 -- this item in the table is a probability list item, but the key might be either a prefab name or prefab type
-                for name, weight in pairs(expandPrefabNameOrType(key, isForDecorationPoint, value)) do
+                for name, weight in pairs(expandPrefabNameOrTag(key, isForDecorationPoint, value)) do
                     if weight == 0 then table.insert(excludedPrefabs, name) end
                     result[name] = (result[name] or 0) + weight
                 end
@@ -514,16 +564,6 @@ local function connectionPointAllowsPrefab(connectionPoint, prefabName)
     return result
 end
 
-
-local function prefabTypeCanCollide(prefabType)
-    local isDecoration = structGenLib.registered_decoration_types[prefabType] == true
-    local isDeadEnd    = structGenLib.registered_deadend_types[prefabType]    == true
-    local canCollide = not (isDecoration or isDeadEnd)
-
-    --debug("prefabType %s canCollide = %s", prefabType, canCollide)
-    return canCollide
-end
-
 -- returns true if the connectingPrefab was placed, false if it was unsuitable
 local function tryPrefab(prefabName, prefabPos, connectionPoint, connectingPrefabName, recursionLimit)
 
@@ -538,7 +578,7 @@ local function tryPrefab(prefabName, prefabPos, connectionPoint, connectingPrefa
 
     -- find the points on connectingPrefab that are compatible with connectionPoint
     local connectingPrefab = structGenLib.registered_prefabs[connectingPrefabName]
-    local isDecoration = structGenLib.registered_decoration_types[connectingPrefab.type] == true
+    local isDecoration = connectingPrefab:isDecoration()
     local pointsToTry
     if isDecoration then
         pointsToTry = connectingPrefab.decorationPoints or {}
@@ -561,7 +601,7 @@ local function tryPrefab(prefabName, prefabPos, connectionPoint, connectingPrefa
         local decorationAnchor = vector.divide(connectingPrefab.size, 2)
         decorationAnchor.y = 0
         decorationAnchor.facing = 0
-        decorationAnchor.validPrefabs = "all"
+        decorationAnchor.validPrefabs = reservedPrefabTag.all
         decorationAnchor.type = connectionPoint.type
         table.insert(matchingConnectionPoints, decorationAnchor)
     end
@@ -589,7 +629,7 @@ local function tryPrefab(prefabName, prefabPos, connectionPoint, connectingPrefa
         local p2 = vector.add(p1, vector.subtract(connectingPrefabSize, 1))
 
         local collision = false
-        if prefabTypeCanCollide(connectingPrefab.type) then
+        if connectingPrefab:canCollide() then
             collision = testForCollision(p1, p2)
             debug("testForCollision for new '%s' returned %s", connectingPrefab.name, collision)
         end
@@ -618,17 +658,16 @@ local function placeDeadEnd(prefabName, prefabPos, connectionPoint)
         structGenLib.deadendPrefabNamesByConnectionType = {}
 
         for _, prefab in pairs(structGenLib.registered_prefabs) do
-            if structGenLib.registered_deadend_types[prefab.type] == true then
-                -- this prefab is a deadend
-                for _, point in pairs(prefab.connectionPoints) do
+            if prefab:isDeadEnd() then
+                for _, point in ipairs(prefab.connectionPoints) do
                     local prefabNames = structGenLib.deadendPrefabNamesByConnectionType[point.type]
                     if prefabNames == nil then prefabNames = {} end
                     table.insert(prefabNames, prefab.name)
                     structGenLib.deadendPrefabNamesByConnectionType[point.type] = prefabNames
+                    debug("prefabNames for connectionType %s of deadend %s: %s", point.type, prefab.name, prefabNames)
                 end
-                debug("prefabNames for this deadend: %s", prefabNames)
             end
-            debug("Checked '%s' for deadend: %s", prefab.type, structGenLib.registered_deadend_types[prefab.type] == true)
+            debug("Checked '%s' for deadend: %s", prefab.name, prefab:isDeadEnd())
         end
 
         if tableCount(structGenLib.deadendPrefabNamesByConnectionType) then
@@ -649,13 +688,9 @@ end
 local function placeConnections(prefab, pos, isDecorationPoints, recursionLimit)
 
     local pointList = prefab.connectionPoints
-    local avoidCollisions = true
-    if isDecorationPoints then
-        pointList = prefab.decorationPoints
-        avoidCollisions = false -- decoration points work the same as connection points except we don't check for spacial collisions
-    end
+    if isDecorationPoints then pointList = prefab.decorationPoints end
 
-    for i, point in pairs(pointList) do
+    for i, point in ipairs(pointList) do
 
         -- One of the entraces is probably already connected to the prefab that spawned this one, so skip that connection point
         if not testIfPointAlreadyConnected(vector.add(pos, point)) then
@@ -691,9 +726,7 @@ end
 placePrefab = function(prefabName, pos, direction, recursionLimit)
 
     debug("Placing '%s' at %s facing %s, recursions remaining %s", prefabName, pos, direction, recursionLimit)
-
-    recursionLimit = recursionLimit - 1
-    local prefab = copyAndRotatePrefab(structGenLib.registered_prefabs[prefabName], direction)
+    local prefab = structGenLib.registered_prefabs[prefabName]:clone():rotate(direction)
 
     if prefab.schematic ~= nil then
         minetest.place_schematic(
@@ -705,11 +738,12 @@ placePrefab = function(prefabName, pos, direction, recursionLimit)
         )
     end
 
-    if prefabTypeCanCollide(prefab.type) then
+    if prefab:canCollide() then
         local pos2 = vector.add(pos, vector.subtract(prefab.size, 1))
         addToCollisionTable(pos, pos2)
     end
 
+    recursionLimit = recursionLimit - 1
     placeConnections(prefab, pos, false, recursionLimit) -- connectionPoints
     placeConnections(prefab, pos, true,  recursionLimit) -- decorationPoints
 end
