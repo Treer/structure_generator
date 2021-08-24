@@ -38,7 +38,10 @@ local prefabTag = {
 }
 
 
-structGenLib.register_prefab({
+local desertDungeon = structGenLib.StructurePlan.new()
+structure_generator.desertDungeon = desertDungeon -- so it can be used by the wand in init.lua
+
+desertDungeon:register_prefab({
     name             = "walled-off hallway",
     size             = vector.new(1,5,5),
     typeTags         = prefabTag.deadend,
@@ -52,7 +55,7 @@ structGenLib.register_prefab({
     }
 });
 
-structGenLib.register_prefab({
+desertDungeon:register_prefab({
     name             = "long hallway",
     size             = vector.new(7,5,5),
     typeTags         = prefabTag.hallway,
@@ -89,7 +92,7 @@ structGenLib.register_prefab({
     }
 });
 
-structGenLib.register_prefab({
+desertDungeon:register_prefab({
     name             = "half hallway",
     size             = vector.new(3,5,5),
     typeTags         = prefabTag.hallway,
@@ -108,7 +111,7 @@ structGenLib.register_prefab({
     }
 });
 
-structGenLib.register_prefab({
+desertDungeon:register_prefab({
     name             = "hallway t-junction",
     size             = vector.new(5,5,5),
     typeTags         = prefabTag.hallwayJunction,
@@ -132,7 +135,7 @@ structGenLib.register_prefab({
     }
 });
 
-structGenLib.register_prefab({
+desertDungeon:register_prefab({
     name             = "hallway intersection",
     size             = vector.new(5,5,5),
     typeTags         = prefabTag.hallwayJunction,
@@ -161,7 +164,7 @@ structGenLib.register_prefab({
     }
 });
 
-structGenLib.register_prefab({
+desertDungeon:register_prefab({
     name             = "hallway corner",
     size             = vector.new(5,5,5),
     typeTags         = prefabTag.corner,
@@ -180,7 +183,7 @@ structGenLib.register_prefab({
     }
 });
 
-structGenLib.register_prefab({
+desertDungeon:register_prefab({
     name             = "small room1",
     size             = vector.new(10,7,10),
     typeTags         = prefabTag.room,
@@ -211,7 +214,7 @@ structGenLib.register_prefab({
     }
 });
 
-structGenLib.register_prefab({
+desertDungeon:register_prefab({
     name             = "small room2",
     size             = vector.new(10,7,10),
     typeTags         = prefabTag.room,
@@ -242,7 +245,7 @@ structGenLib.register_prefab({
     }
 });
 
-structGenLib.register_prefab({
+desertDungeon:register_prefab({
     name             = "medium room1",
     size             = vector.new(15,7,10),
     typeTags         = prefabTag.room,
@@ -288,7 +291,7 @@ structGenLib.register_prefab({
     }
 });
 
-structGenLib.register_prefab({
+desertDungeon:register_prefab({
     name             = "small chamber1",
     size             = vector.new(5,7,5),
     typeTags         = prefabTag.chamberSmall,
@@ -309,7 +312,7 @@ structGenLib.register_prefab({
     }
 });
 
-structGenLib.register_prefab({
+desertDungeon:register_prefab({
     name             = "medium chamber1",
     size             = vector.new(10,7,10),
     typeTags         = prefabTag.chamberMedium,
@@ -340,7 +343,7 @@ structGenLib.register_prefab({
     }
 });
 
-structGenLib.register_prefab({
+desertDungeon:register_prefab({
     name             = "hallway stairs",
     size             = vector.new(9,14,5),
     typeTags         = prefabTag.hallway,
@@ -377,7 +380,7 @@ structGenLib.register_prefab({
     }
 });
 
-structGenLib.register_prefab({
+desertDungeon:register_prefab({
     name             = "pillar1x1",
     size             = vector.new(1,5,1),
     typeTags         = { prefabTag.decoration, prefabTag.pillar },
@@ -385,7 +388,7 @@ structGenLib.register_prefab({
     connectionPoints = {}
 });
 
-structGenLib.register_prefab({
+desertDungeon:register_prefab({
     name             = "treasure chest",
     size             = vector.new(1,2,1),
     typeTags         = { prefabTag.decoration, prefabTag.treasure1 },
@@ -393,7 +396,7 @@ structGenLib.register_prefab({
     connectionPoints = {}
 });
 
-structGenLib.register_prefab({
+desertDungeon:register_prefab({
     name             = "covered way",
     size             = vector.new(9,10,5),
     typeTags         = prefabTag.hallway,

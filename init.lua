@@ -3,7 +3,7 @@
 --   1 = print(...)
 --   2 = minetest.chat_send_all(...)
 --   4 = minetest.log("info", ...)
-local DEBUG_FLAGS = 0
+local DEBUG_FLAGS = 6
 
 
 
@@ -89,6 +89,7 @@ dofile(structure_generator.modPath .. DIR_DELIM .. "structure_scaffolding_comman
 -- Load the demo file so the scaffolding_commands have something to work with
 dofile(structure_generator.modPath .. DIR_DELIM .. "example_ready_to_scaffold.lua")
 
+dofile(structure_generator.modPath .. DIR_DELIM .. "example_ready_to_build.lua")
 
 
 -- ====================================
@@ -100,6 +101,7 @@ minetest.register_tool(structure_generator.modName .. ":magic_wand", {
 	wield_image = "structure_generator_wand.png^[transformR90",
 
     on_use = function(itemstack, user, pointed_thing)
+        --[[
         -- unload example_ready_to_scaffold, and load the example that's ready to build structures
         structure_generator.lib.clear()
         dofile(structure_generator.modPath .. DIR_DELIM .. "example_ready_to_build.lua")
@@ -115,6 +117,13 @@ minetest.register_tool(structure_generator.modName .. ":magic_wand", {
         -- unload the working example and reload the scaffold example
         structure_generator.lib.clear()
         dofile(structure_generator.modPath .. DIR_DELIM .. "example_ready_to_scaffold.lua")
+        ]]
+        local pos = minetest.get_pointed_thing_position(pointed_thing)
+        if pos == nil then
+            structure_generator.debug("spell failed, no position found")
+        else
+            structure_generator.desertDungeon:generate("medium room1", nil, {x = pos.x - 3, y = pos.y, z = pos.z - 3})
+        end
 
         return nil -- prevent wand being removed from inventory
     end
