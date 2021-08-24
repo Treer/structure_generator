@@ -408,14 +408,12 @@ StructurePlan.__index = StructurePlan -- Make StructurePlan usable as a metatabl
 local function _StructurePlanConstructor(optional_structurePlan)
     local structurePlan = optional_structurePlan or {}
     structurePlan.registered_prefabs          = structurePlan.registered_prefabs          or {}
-    structurePlan.registrationOrdered_prefabs = structurePlan.registrationOrdered_prefabs or {} -- array of prefab tables in order of registration
 
     -- these will be set whenever plan_structure() is invoked, they are listed here only for reference.
     structurePlan.collisionTable      = {}
     structurePlan.connectedPoints     = {}
     structurePlan.plannedPrefabs      = {}
     structurePlan.deadendPrefabNamesByConnectionType = nil -- will get set if placeDeadEnd() is called
-    structurePlan.recursionsRemaining = nil
     structurePlan.userParam           = nil
 
 	return setmetatable(structurePlan, StructurePlan)
@@ -470,7 +468,6 @@ function  StructurePlan:register_prefab(prefab_definition_table)
 
     local prefab = Prefab.new(prefab_definition_table)
     self.registered_prefabs[prefab.name] = prefab
-    table.insert(self.registrationOrdered_prefabs, prefab)
 end
 
 -- returns a floorplan which can be passed to place_structure()
@@ -490,7 +487,6 @@ function StructurePlan:generate(firstPrefabName, direction, pos, seed, recursion
     assert(maxp == nil or isVectorTable(maxp), "Invalid 'maxp' table passed to  StructurePlan:generate()")
     debug("StructurePlan:generate(%s, %s, %s, %s, %s, %s, %s, %s)", firstPrefabName, direction, seed, recursionLimit, pos, minp, maxp, userParam)
 
-    self.recursionsRemaining                = recursionLimit or defaultRecursionLimit
     self.userParam                          = userParam
     self.originalPos                        = pos
 
@@ -511,7 +507,7 @@ function StructurePlan:generate(firstPrefabName, direction, pos, seed, recursion
     setRngSeed(seed)
     if direction == nil then direction = getRngInt(0, 3) end
 
-    self:placePrefab(firstPrefabName, pos, direction)
+    self:placePrefab(firstPrefabName, pos, direction, recursionLimit or defaultRecursionLimit)
 
     return self.plan
 end
@@ -603,9 +599,9 @@ function StructurePlan:connectionPointAllowsPrefab(connectionPoint, prefabName)
 end
 
 -- returns true if the connectingPrefab was placed, false if it was unsuitable
-function StructurePlan:tryPrefab(prefabName, prefabPos, connectionPoint, connectingPrefabName)
+function StructurePlan:tryPrefab(prefabName, prefabPos, connectionPoint, connectingPrefabName, recursionLimit)
     assert(self ~= nil, "Call structurePlan:tryPrefab() with a colon.")
-    debug("tryPrefab(\"%s\", %s, %s, \"%s\")", prefabName, prefabPos, connectionPoint, connectingPrefabName)
+    debug("tryPrefab(\"%s\", %s, %s, \"%s\", %s)", prefabName, prefabPos, connectionPoint, connectingPrefabName, recursionLimit)
 
     local connectionPos = vector.add(prefabPos, connectionPoint)
     if self:testIfPointAlreadyConnected(connectionPos) then
@@ -674,7 +670,7 @@ function StructurePlan:tryPrefab(prefabName, prefabPos, connectionPoint, connect
 
         if not collision then
             self:markPointAsConnected(connectionPos, connectingPrefab.name)
-            self:placePrefab(connectingPrefab.name, p1, newDirection)
+            self:placePrefab(connectingPrefab.name, p1, newDirection, recursionLimit)
             --minetest.set_node(p1, {name="default:mese"}) -- debug marker
             --minetest.set_node(p2, {name="default:meselamp"})
 
@@ -718,12 +714,12 @@ function StructurePlan:placeDeadEnd(prefabName, prefabPos, connectionPoint)
 
     if deadendPrefabName ~= nil then
         debug("Attempting deadend '%s'", deadendPrefabName)
-        self:tryPrefab(prefabName, prefabPos, connectionPoint, deadendPrefabName)
+        self:tryPrefab(prefabName, prefabPos, connectionPoint, deadendPrefabName, 1)
     end
 end
 
 
-function StructurePlan:placeConnections(prefab, pos, isDecorationPoints)
+function StructurePlan:placeConnections(prefab, pos, isDecorationPoints, recursionLimit)
     assert(self ~= nil, "Call structurePlan:placeConnections() with a colon.")
 
     local pointList = prefab.connectionPoints
@@ -733,7 +729,7 @@ function StructurePlan:placeConnections(prefab, pos, isDecorationPoints)
         -- One of the entrances is already connected to the prefab that spawned this one, so skip that connection point
         if not self:testIfPointAlreadyConnected(vector.add(pos, point)) then
             local validPrefabs
-            if self.recursionsRemaining > 0 or (isDecorationPoints and self.recursionsRemaining > -2) then -- ensure a room at the recursion limit can still be decorated
+            if recursionLimit > 0 or (isDecorationPoints and recursionLimit > -2) then -- ensure a room at the recursion limit can still be decorated
                 validPrefabs = self:normalizeValidPrefabs(point.validPrefabs, isDecorationPoints) -- get a probability list of valid prefabs
             else
                 validPrefabs = {}
@@ -747,7 +743,7 @@ function StructurePlan:placeConnections(prefab, pos, isDecorationPoints)
                 nextPrefabName = selectFromProbabilityList(validPrefabs)
                 if nextPrefabName ~= nil then
                     validPrefabs[nextPrefabName] = nil -- remove it from the probability list so if we fail to place it we can try another
-                    connectionPlaced = self:tryPrefab(prefab.name, pos, point, nextPrefabName)
+                    connectionPlaced = self:tryPrefab(prefab.name, pos, point, nextPrefabName, recursionLimit)
                 end
             until connectionPlaced or nextPrefabName == nil
 
@@ -787,10 +783,10 @@ function StructurePlan:placePrefab(prefabName, pos, direction, recursionLimit)
         self:addToCollisionTable(pos, pos2)
     end
 
-    self.recursionsRemaining = self.recursionsRemaining - 1
+    recursionLimit = recursionLimit - 1
 
-    self:placeConnections(prefab, pos, false) -- connectionPoints
-    self:placeConnections(prefab, pos, true) -- decorationPoints
+    self:placeConnections(prefab, pos, false, recursionLimit) -- connectionPoints
+    self:placeConnections(prefab, pos, true,  recursionLimit) -- decorationPoints
 end
 
 
@@ -802,365 +798,3 @@ structGenLib.ConnectionPoint = ConnectionPoint
 structGenLib.PrefabScaffold  = PrefabScaffold
 structGenLib.Prefab          = Prefab
 structGenLib.StructurePlan   = StructurePlan
-
--- ===========================
---             API
--- ===========================
---[[
-local placePrefab         -- the placePrefab(prefabName, pos, direction, recursionLimit) function will be assigned to this var
-
-
-function structGenLib.clear()
-    structGenLib.registered_prefabs          = {}
-    structGenLib.registrationOrdered_prefabs = {} -- array of prefab tables in order of registration
-    structGenLib.deadendPrefabNamesByConnectionType = nil
-end
-structGenLib.clear() -- initialize the tables
-
--- table of bounding boxes so prefabs aren't placed on top of each other
-structGenLib.collisionTable = {}
-structGenLib.connectedPoints = {}
-
-local function clearCollisionTable()
-    structGenLib.collisionTable = {}
-    structGenLib.connectedPoints = {}
-end
-
-local function addToCollisionTable(minp, maxp)
-    table.insert(structGenLib.collisionTable, {minp = minp, maxp = maxp})
-end
-
-local function testForCollision(minp, maxp)
-    -- nothing fancy to see here like oct-trees or BSPs, in this house we use brute force
-    for _, box in ipairs(structGenLib.collisionTable) do
-        local bminp, bmaxp = box.minp, box.maxp
-        local separated = bminp.x > maxp.x or bminp.y > maxp.y or bminp.z > maxp.z or
-                          bmaxp.x < minp.x or bmaxp.y < minp.y or bmaxp.z < minp.z
-        if not separated then
-            return true
-        end
-    end
-    return false
-end
-
-local function markPointAsConnected(pos, prefabName)
-    structGenLib.connectedPoints[minetest.pos_to_string(pos)] = (prefabName or "name not specified")
-end
-
-local function testIfPointAlreadyConnected(pos)
-    debug("testIfPointAlreadyConnected found '%s' at %s (tablesize %s)", structGenLib.connectedPoints[minetest.pos_to_string(pos)], pos, tableCount(structGenLib.connectedPoints))
-    return structGenLib.connectedPoints[minetest.pos_to_string(pos)] ~= nil
-end
-]]
-structGenLib.registered_prefabs          = {}
-structGenLib.registrationOrdered_prefabs = {} -- array of prefab tables in order of registration
-
--- limited to scaffolding?
-function structGenLib.register_prefab(name, prefab_definition_table)
-    --debug("register_prefab('%s', %s)", name, prefab_definition_table)
-
-    -- if the first param is the prefab_definition_table and the name is in the table then that's ok too
-    if type(name) == 'table' and isNonEmptyString(name.name) then
-        prefab_definition_table = name
-        name = prefab_definition_table.name
-    end
-
-    if type(prefab_definition_table) ~= 'table' then
-        error("Argument passed to register_prefab() is not a prefab definition table: " .. convertToString(prefab_definition_table), 0)
-    end
-
-    prefab_definition_table.name = name
-    local prefab = PrefabScaffold.new(prefab_definition_table)
-    debug("register_prefab('%s', ...) registering %s", name, prefab)
-
-    structGenLib.registered_prefabs[name] = prefab
-    table.insert(structGenLib.registrationOrdered_prefabs, prefab)
-end
-
---[[
--- returns a probability list of prefabs that have a name or tag that matches nameOrTag
--- (All items will have the same weighting, which can be limited by specifying totalWeight)
---
--- isForDecorationPoint provides some context in case nameOrTag is "all"
-local function expandPrefabNameOrTag(nameOrTag, isForDecorationPoint, totalWeight)
-
-    if nameOrTag == reservedPrefabTag.none then
-        return {}
-    end
-
-    local result = {}
-    local includeAsMemberOfAll = false
-    local itemCount = 0
-
-    for _, prefab in pairs(structGenLib.registered_prefabs) do
-
-        if nameOrTag == reservedPrefabTag.all then
-            includeAsMemberOfAll = (isForDecorationPoint == nil) or (isForDecorationPoint == prefab:isDecoration())
-        end
-
-        if prefab.name == nameOrTag or prefab:hasTag(nameOrTag) or includeAsMemberOfAll then
-            result[prefab.name] = 1
-            itemCount = itemCount + 1
-        end
-    end
-
-    if totalWeight ~= nil then
-        -- adjust weightings so they sum to totalWeight
-        for name, _ in pairs(result) do result[name] = totalWeight / itemCount end
-    end
-
-    return result
-end
-
--- validPrefabs might be a name string, a prefab type, or a list of these with probabilities
--- return a new probability list of prefab names
--- isForDecorationPoint provides some context in case validPrefabs contains "all"
-local function normalizeValidPrefabs(validPrefabs, isForDecorationPoint)
-
-    local result = {}
-
-    if type(validPrefabs) == 'string' then
-        -- return all prefabs with a name or type that match the string
-        return expandPrefabNameOrTag(validPrefabs, isForDecorationPoint)
-
-    elseif type(validPrefabs) == 'table' then
-        local excludedPrefabs = {}
-        -- expand out any prefab types
-        for key, value in pairs(validPrefabs) do
-            if type(value) == 'string' then
-                -- this item in the table is a prefab name or prefab type
-                for name, weight in pairs(expandPrefabNameOrTag(value, isForDecorationPoint)) do
-                    result[name] = (result[name] or 0) + weight
-                end
-            elseif type(value) == 'number' then
-                -- this item in the table is a probability list item, but the key might be either a prefab name or prefab type
-                for name, weight in pairs(expandPrefabNameOrTag(key, isForDecorationPoint, value)) do
-                    if weight == 0 then table.insert(excludedPrefabs, name) end
-                    result[name] = (result[name] or 0) + weight
-                end
-            end
-        end
-
-        for _, name in ipairs(excludedPrefabs) do
-            -- specifying a probability of zero excludes the prefab and overrides any weight it
-            -- may have gained from membership in otherwise included groups
-            result[name] = nil
-        end
-
-        debug("## expanded probability table: %s", result)
-    end
-    return result;
-end
-
-
-local function connectionPointAllowsPrefab(connectionPoint, prefabName)
-    local allValidPrefabs = normalizeValidPrefabs(connectionPoint.validPrefabs) -- get a probability list of valid prefabs
-    local result = allValidPrefabs[prefabName] ~= nil
-    debug("%s with validPreface[%s]: allows '%s' = %s", connectionPoint.type,  connectionPoint.validPrefabs, prefabName, result)
-    return result
-end
-
--- returns true if the connectingPrefab was placed, false if it was unsuitable
-local function tryPrefab(prefabName, prefabPos, connectionPoint, connectingPrefabName, recursionLimit)
-
-    debug("tryPrefab(\"%s\", %s, %s, \"%s\", %s)", prefabName, prefabPos, connectionPoint, connectingPrefabName, recursionLimit)
-
-    local connectionPos = vector.add(prefabPos, connectionPoint)
-    if testIfPointAlreadyConnected(connectionPos) then
-        -- this connection point has already been connected to something
-        debug("## tryPrefab called on point that was already connected - you should have caught this earlier")
-        return false
-    end
-
-    -- find the points on connectingPrefab that are compatible with connectionPoint
-    local connectingPrefab = structGenLib.registered_prefabs[connectingPrefabName]
-    local isDecoration = connectingPrefab:isDecoration()
-    local pointsToTry
-    if isDecoration then
-        pointsToTry = connectingPrefab.decorationPoints or {}
-    else
-        pointsToTry = connectingPrefab.connectionPoints or {}
-    end
-
-    local matchingConnectionPoints = {}
-    for _,point in ipairs(pointsToTry) do
-        if point.type == connectionPoint.type then
-            -- The connection point matches, but is this prefab in the connection point's valid prefab list?
-            if connectionPointAllowsPrefab(point, prefabName) then
-                table.insert(matchingConnectionPoints, point)
-            end
-        end
-    end
-    if #matchingConnectionPoints == 0 and isDecoration then
-        -- don't force decoration prefabs to specify connection points, just use the their middle
-        -- if they didn't specified anything.
-        local decorationAnchor = vector.divide(connectingPrefab.size, 2)
-        decorationAnchor.y = 0
-        decorationAnchor.facing = 0
-        decorationAnchor.validPrefabs = reservedPrefabTag.all
-        decorationAnchor.type = connectionPoint.type
-        table.insert(matchingConnectionPoints, decorationAnchor)
-    end
-
-
-    while #matchingConnectionPoints > 0 do
-        local remotePoint = extractRandomElementFromArray(matchingConnectionPoints) -- removes the item from matchingConnectionPoints
-        -- rotate and translate prefabPos so that the connectionPoints face each other and have the same coordinate
-        -- the connectionPoints face each other if there direction are 180 degrees apart, which is a value of 2
-        local newDirection = (6 - (remotePoint.facing - connectionPoint.facing)) % 4 -- using 6 instead of 2 to avoid negatives (6 = 540 degrees which is the same as 180 degrees, i.e. 2)
-
-        local rotatedPoint = copyTable(remotePoint)
-        rotatePoint(connectingPrefab.size, rotatedPoint, newDirection)
-        local translation = vector.subtract(connectionPoint, rotatedPoint)
-        translation = vector.apply(translation, math.floor) -- shouldn't be needed, but handle it in case someone tries to connect two points where one has a 0.5 portion and the other doesn't
-
-        local connectingPrefabSize
-        if (newDirection % 2) == 1 then
-            -- x size and z size of the prefab schematic will switch when it's rotated
-            connectingPrefabSize = vector.new(connectingPrefab.size.z, connectingPrefab.size.y, connectingPrefab.size.x)
-        else
-            connectingPrefabSize = connectingPrefab.size
-        end
-        local p1 = vector.add(prefabPos, translation)
-        local p2 = vector.add(p1, vector.subtract(connectingPrefabSize, 1))
-
-        local collision = false
-        if connectingPrefab:canCollide() then
-            collision = testForCollision(p1, p2)
-            debug("testForCollision for new '%s' returned %s", connectingPrefab.name, collision)
-        end
-
-        if not collision then
-            markPointAsConnected(connectionPos, connectingPrefab.name)
-            placePrefab(connectingPrefab.name, p1, newDirection, recursionLimit)
-            --minetest.set_node(p1, {name="default:mese"}) -- debug marker
-            --minetest.set_node(p2, {name="default:meselamp"})
-
-
-            return true
-        else
-            debug("tryPrefab() aborting attempt to connect new '%s' to '%s' due to collision (prefab still has %s other connectionPoints to try)", connectingPrefab.name, prefabName, #matchingConnectionPoints)
-        end
-    end
-
-    return false
-end
-
-
-
-local function placeDeadEnd(prefabName, prefabPos, connectionPoint)
-
-    if structGenLib.deadendPrefabNamesByConnectionType == nil then
-        structGenLib.deadendPrefabNamesByConnectionType = {}
-
-        for _, prefab in pairs(structGenLib.registered_prefabs) do
-            if prefab:isDeadEnd() then
-                for _, point in ipairs(prefab.connectionPoints) do
-                    local prefabNames = structGenLib.deadendPrefabNamesByConnectionType[point.type]
-                    if prefabNames == nil then prefabNames = {} end
-                    table.insert(prefabNames, prefab.name)
-                    structGenLib.deadendPrefabNamesByConnectionType[point.type] = prefabNames
-                    debug("prefabNames for connectionType %s of deadend %s: %s", point.type, prefab.name, prefabNames)
-                end
-            end
-            debug("Checked '%s' for deadend: %s", prefab.name, prefab:isDeadEnd())
-        end
-
-        if tableCount(structGenLib.deadendPrefabNamesByConnectionType) then
-            minetest.chat_send_all("WARNING: No dead-ends are specified for the structure-generator")
-            minetest.log("warn", "WARNING: No dead-ends are specified the structure-generator")
-        end
-    end
-
-    local validDeadendPrefabNames = structGenLib.deadendPrefabNamesByConnectionType[connectionPoint.type]
-    local deadendPrefabName = pickRandomElementFromArray(validDeadendPrefabNames)
-
-    if deadendPrefabName ~= nil then
-        debug("Attempting deadend '%s'", deadendPrefabName)
-        tryPrefab(prefabName, prefabPos, connectionPoint, deadendPrefabName, 1)
-    end
-end
-
-local function placeConnections(prefab, pos, isDecorationPoints, recursionLimit)
-
-    local pointList = prefab.connectionPoints
-    if isDecorationPoints then pointList = prefab.decorationPoints end
-
-    for i, point in ipairs(pointList) do
-
-        -- One of the entraces is probably already connected to the prefab that spawned this one, so skip that connection point
-        if not testIfPointAlreadyConnected(vector.add(pos, point)) then
-            local validPrefabs
-            if recursionLimit > 0 or (isDecorationPoints and recursionLimit > -2) then -- ensure a room at the recursion limit can still be decorated
-                validPrefabs = normalizeValidPrefabs(point.validPrefabs, isDecorationPoints) -- get a probability list of valid prefabs
-            else
-                validPrefabs = {}
-            end
-
-            debug("placeConnections found %s validPrefabs for point %s of %s", tableCount(validPrefabs), i, tableCount(pointList))
-
-            local connectionPlaced = false;
-            local nextPrefabName
-            repeat
-                nextPrefabName = selectFromProbabilityList(validPrefabs)
-                if nextPrefabName ~= nil then
-                    validPrefabs[nextPrefabName] = nil -- remove it from the probability list so if we fail to place it we can try another
-                    connectionPlaced = tryPrefab(prefab.name, pos, point, nextPrefabName, recursionLimit)
-                end
-            until connectionPlaced or nextPrefabName == nil
-
-            if not connectionPlaced and not isDecorationPoints then
-                debug("placeConnections falling back to dead-end on '%s'", prefab.name)
-                placeDeadEnd(prefab.name, pos, point)
-            end
-        end
-    end
-
-end
-
-
-placePrefab = function(prefabName, pos, direction, recursionLimit)
-
-    debug("Placing '%s' at %s facing %s, recursions remaining %s", prefabName, pos, direction, recursionLimit)
-    local prefab = structGenLib.registered_prefabs[prefabName]:clone():rotate(direction)
-
-    if prefab.schematic ~= nil then
-        minetest.place_schematic(
-            pos,
-            modPath .. DIR_DELIM .. prefab.schematic,
-            direction * 90,
-            {},  -- node replacements
-            true -- force_placement
-        )
-    end
-
-    if prefab:canCollide() then
-        local pos2 = vector.add(pos, vector.subtract(prefab.size, 1))
-        addToCollisionTable(pos, pos2)
-    end
-
-    recursionLimit = recursionLimit - 1
-    placeConnections(prefab, pos, false, recursionLimit) -- connectionPoints
-    placeConnections(prefab, pos, true,  recursionLimit) -- decorationPoints
-end
-
--- deprecated, use plan_structure() followed by place_structure()
--- direction: nil for random. May be 0, 1, 2, 3
--- seed: nil for random
--- recursionLimit: nil for default
-function structGenLib.build_structure(firstPrefabName, pos, direction, seed, recursionLimit)
-    debug("build_structure(%s, %s, %s, %s, %s)", firstPrefabName, pos, direction, seed, recursionLimit)
-
-    recursionLimit = recursionLimit or defaultRecursionLimit
-
-    if structGenLib.registered_prefabs[firstPrefabName] == nil then
-        error("build_structure() told to build \"" .. firstPrefabName .. "\", but there's no registered prefab with that name")
-    end
-
-    setRngSeed(seed)
-    if direction == nil then direction = getRngInt(0, 3) end
-
-    clearCollisionTable()
-    placePrefab(firstPrefabName, pos, direction, recursionLimit)
-end
-]]

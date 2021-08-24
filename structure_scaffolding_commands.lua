@@ -2,9 +2,36 @@
 if not (minetest.global_exists("structure_generator") and structure_generator.lib ~= nil) then
     error("structure_scaffolding_tool.lua depends on structure_generator_lib.lua")
 end
-local S = structure_generator.get_translator
+local S            = structure_generator.get_translator
+local structGenLib = structure_generator.lib
 
+-- ===========================
+--      Scaffolding API
+-- ===========================
 
+structGenLib.registered_prefabs          = {}
+structGenLib.registrationOrdered_prefabs = {} -- array of prefab tables in order of registration
+
+function structGenLib.register_prefab(name, prefab_definition_table)
+    --debug("register_prefab('%s', %s)", name, prefab_definition_table)
+
+    -- if the first param is the prefab_definition_table and the name is in the table then that's ok too
+    if type(name) == 'table' and type(name.name) == "string" and string.len(name.name) > 0 then
+        prefab_definition_table = name
+        name = prefab_definition_table.name
+    end
+
+    if type(prefab_definition_table) ~= 'table' then
+        error("Argument passed to register_prefab() is not a prefab definition table: " .. structure_generator.toString(prefab_definition_table), 0)
+    end
+
+    prefab_definition_table.name = name
+    local prefab = structGenLib.PrefabScaffold.new(prefab_definition_table)
+    structure_generator.debug("register_prefab('%s', ...) registering %s", name, prefab)
+
+    structGenLib.registered_prefabs[name] = prefab
+    table.insert(structGenLib.registrationOrdered_prefabs, prefab)
+end
 
 -- ==========================
 --           Nodes
