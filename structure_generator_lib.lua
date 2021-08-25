@@ -470,7 +470,7 @@ function  StructurePlan:register_prefab(prefab_definition_table)
     self.registered_prefabs[prefab.name] = prefab
 end
 
--- returns a floorplan which can be passed to place_structure()
+-- returns a floorplan which can be passed to StructurePlan.emerge()
 -- direction:      nil for random. May be 0, 1, 2, 3
 -- seed:           nil for random
 -- recursionLimit: nil for default, specifies structure size, i.e. how many prefabs away from the first one placed can be the structure sprawl.
@@ -507,11 +507,32 @@ function StructurePlan:generate(firstPrefabName, direction, pos, seed, recursion
     setRngSeed(seed)
     if direction == nil then direction = getRngInt(0, 3) end
 
-    self:placePrefab(firstPrefabName, pos, direction, recursionLimit or defaultRecursionLimit)
+    self:planPrefab(firstPrefabName, pos, direction, recursionLimit or defaultRecursionLimit)
 
     return self.plan
 end
 
+
+-- Either
+--   structurePlanInstance.emerge()
+--   StructurePlan.emerge(plansReturnedByGenerate)
+function StructurePlan.emerge(a)
+    assert(type(a) == "table", "Call structurePlan:emerge() with a colon, or use a dot and pass it a plan table , e.g. structurePlan.emerge(plan). Was passed " .. convertToString(a))
+
+    local plans = a.plan or a
+
+    for _, prefab in ipairs(plans) do
+        if prefab.schematic ~= nil then
+            minetest.place_schematic(
+                prefab.schematicpos,
+                modPath .. DIR_DELIM .. prefab.schematic,
+                prefab.schematicDirection,
+                {},  -- node replacements
+                true -- force_placement
+            )
+        end
+    end
+end
 
 
 -- returns a probability list of prefabs that have a name or tag that matches nameOrTag
@@ -670,7 +691,7 @@ function StructurePlan:tryPrefab(prefabName, prefabPos, connectionPoint, connect
 
         if not collision then
             self:markPointAsConnected(connectionPos, connectingPrefab.name)
-            self:placePrefab(connectingPrefab.name, p1, newDirection, recursionLimit)
+            self:planPrefab(connectingPrefab.name, p1, newDirection, recursionLimit)
             --minetest.set_node(p1, {name="default:mese"}) -- debug marker
             --minetest.set_node(p2, {name="default:meselamp"})
 
@@ -756,9 +777,9 @@ function StructurePlan:placeConnections(prefab, pos, isDecorationPoints, recursi
 end
 
 
-function StructurePlan:placePrefab(prefabName, pos, direction, recursionLimit)
-    assert(self ~= nil, "Call structurePlan:placePrefab() with a colon.")
-    debug("Placing '%s' at %s facing %s, recursions remaining %s", prefabName, pos, direction, recursionLimit)
+function StructurePlan:planPrefab(prefabName, pos, direction, recursionLimit)
+    assert(self ~= nil, "Call structurePlan:planPrefab() with a colon.")
+    debug("Planning '%s' at %s facing %s, recursions remaining %s", prefabName, pos, direction, recursionLimit)
 
     -- rotate a clone of the prefab
     local prefab = self.registered_prefabs[prefabName]:clone():rotate(direction)
@@ -766,17 +787,6 @@ function StructurePlan:placePrefab(prefabName, pos, direction, recursionLimit)
     prefab.schematicpos = pos
     prefab.schematicDirection = direction * 90
     table.insert(self.plan, prefab)
-
-    if prefab.schematic ~= nil then
-        minetest.place_schematic(
-            pos,
-            modPath .. DIR_DELIM .. prefab.schematic,
-            direction * 90,
-            {},  -- node replacements
-            true -- force_placement
-        )
-    end
-
 
     if prefab:canCollide() then
         local pos2 = vector.add(pos, vector.subtract(prefab.size, 1))
@@ -788,8 +798,6 @@ function StructurePlan:placePrefab(prefabName, pos, direction, recursionLimit)
     self:placeConnections(prefab, pos, false, recursionLimit) -- connectionPoints
     self:placeConnections(prefab, pos, true,  recursionLimit) -- decorationPoints
 end
-
-
 
 
 

@@ -3,7 +3,7 @@
 --   1 = print(...)
 --   2 = minetest.chat_send_all(...)
 --   4 = minetest.log("info", ...)
-local DEBUG_FLAGS = 6
+local DEBUG_FLAGS = 0
 
 
 
@@ -106,7 +106,11 @@ minetest.register_tool(structure_generator.modName .. ":magic_wand", {
         if pos == nil then
             structure_generator.debug("spell failed, no position found")
         else
-            structure_generator.desertDungeon:generate("medium room1", nil, {x = pos.x - 3, y = pos.y, z = pos.z - 3})
+            -- create a list of prefabs
+            local dungeonPlans = structure_generator.desertDungeon:generate("medium room1", nil, {x = pos.x - 3, y = pos.y, z = pos.z - 3})
+
+            -- place the list of prefabs
+            structure_generator.lib.StructurePlan.emerge(dungeonPlans)
         end
 
         return nil -- prevent wand being removed from inventory
