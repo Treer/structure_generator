@@ -838,6 +838,28 @@ function handle_clearArea(p1, p2)
 end
 
 
+function handle_replaceNodes(startPos, prefabName, oldNodeName, newNodeName)
+
+    local callback_replaceNodes = function(prefabList)
+        for _, prefab in pairs(prefabList) do
+            if prefabName == nil or prefab.name == prefabName then
+                local p1    = prefab.p1
+                local p2    = vector.add(prefab.p1, vector.subtract(prefab.size, 1))
+
+                local nodePositions = minetest.find_nodes_in_area(p1, p2, oldNodeName)
+                local newNode = {name = newNodeName}
+                for _, pos in ipairs(nodePositions) do
+                    minetest.set_node(pos, newNode)
+                end
+                minetest.chat_send_all(S("@1 '@2' were replaced with '@3' in prefab '@4'", #nodePositions, oldNodeName, newNodeName, prefab.name))
+            end
+        end
+    end
+
+    local success, errorString = findPrefabsOnMap(startPos, callback_replaceNodes)
+    return success, errorString
+end
+
 -- ==================================
 --         Chat commands
 -- ==================================
@@ -1028,3 +1050,39 @@ minetest.register_chatcommand(
         end,
     }
 )
+
+minetest.register_chatcommand(
+    "replace_nodes",
+	{
+		description = S("Replace every node of the specified type with a replacement type, e.g. /replace_nodes air structure_generator:replaceable_node"),
+		privs = {debug = true}, -- you shouldn't run this mod on a real server, it's a tool for developing mods. Requiring debug to be safe.
+        params = S("[<prefabName] <oldNodeName> <newNodeName>"),
+		func = function(playerName, param)
+            local prefabName, oldNodeName, newNodeName = string.match(param, "\"(.+)\" ([^ ]+) ([^ ]+)")
+            if prefabName == nil then
+                prefabName, oldNodeName, newNodeName = string.match(param, "'(.+)' ([^ ]+) ([^ ]+)")
+            end
+            if prefabName == nil then
+                oldNodeName, newNodeName = string.match(param, "([^ ]+) ([^ ]+)")
+            end
+            if oldNodeName == nil or newNodeName == nil then
+                return false, S("Wrong number of arguments")
+            end
+
+            if minetest.registered_nodes[oldNodeName] == nil then
+                return false, S("Node type \"@1\" not known", oldNodeName)
+            end
+            if minetest.registered_nodes[newNodeName] == nil then
+                return false, S("Node type \"@1\" not known", newNodeName)
+            end
+
+            local startPos = findNearbyStartPos(playerName)
+            if startPos == nil then
+                return false, S("Stand near the start tag/sign of the set of the prefabs you want to fill.")
+            end
+
+            return handle_replaceNodes(startPos, prefabName, oldNodeName, newNodeName)
+		end
+	}
+)
+
