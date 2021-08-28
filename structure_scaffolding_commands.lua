@@ -150,7 +150,7 @@ local nodeSearchDist       = 2
 local startPosSearchRadius = 10
 local boundingBoxNode      = {name = nodeName_replaceable}
 local exportDirectory      = "schems"
-local codeTemplateFile     = "example_ready_to_build.lua"
+local codeTemplateFile     = "ready_to_build.lua"
 
 
 function sanitizeFilename(name)
@@ -159,11 +159,23 @@ end
 
 function getSchematicFilename(prefabName)
     local filename = sanitizeFilename(prefabName) .. ".mts"
+    if type(structGenLib.schematicNamePrefix) == "string" then
+        filename = structGenLib.schematicNamePrefix .. filename
+    end
+    return filename
+end
+
+function getSchematicFilenameAndPath(prefabName)
+    local filename = getSchematicFilename(prefabName)
     return minetest.get_worldpath() .. DIR_DELIM .. exportDirectory .. DIR_DELIM .. filename
 end
 
-function getCodeTemplateFilename()
-    return minetest.get_worldpath() .. DIR_DELIM .. exportDirectory .. DIR_DELIM .. codeTemplateFile
+function getCodeTemplateFilenameAndPath()
+    local filename = codeTemplateFile
+    if type(structGenLib.schematicNamePrefix) == "string" then
+        filename = structGenLib.schematicNamePrefix .. filename
+    end
+    return minetest.get_worldpath() .. DIR_DELIM .. exportDirectory .. DIR_DELIM .. filename
 end
 
 
@@ -282,7 +294,7 @@ local function createBoundingBoxes(playerName, startPos)
                     local ySize  = prefab.size.y - 1
                     local zSize  = prefab.size.z - 1
                     local signlocation = {x = pos.x - signDistance, y = pos.y, z = pos.z}
-                    local schematicFile = getSchematicFilename(prefab.name)
+                    local schematicFile = getSchematicFilenameAndPath(prefab.name)
 
                     placeSign(
                         signlocation,
@@ -461,7 +473,7 @@ local function savePrefabSchematic(prefab)
         layerProbabilityList = {{ypos=0, prob=0}}
     end
 
-    local filename = getSchematicFilename(prefab.name)
+    local filename = getSchematicFilenameAndPath(prefab.name)
     local ret = minetest.create_schematic(
         prefab.p1,
         prefab.p2,
@@ -561,7 +573,7 @@ end
 
 local function savePrefabCodeTemplate(prefabList)
 
-    local filename = getCodeTemplateFilename()
+    local filename = getCodeTemplateFilenameAndPath()
     local file = io.open(filename, "w")
 
     writeBoilerplate(file, prefabList)
@@ -582,7 +594,7 @@ local function savePrefabCodeTemplate(prefabList)
         file:write("    name             = \"" .. prefab.name .. "\",\n")
         file:write("    size             = vector.new" .. minetest.pos_to_string(prefab.size) .. ",\n")
         file:write("    typeTags         = { " .. typeTagsString .. " },\n")
-        file:write("    schematic        = \"" .. sanitizeFilename(prefab.name) .. ".mts\",\n")
+        file:write("    schematic        = \"" .. getSchematicFilename(prefab.name) .. "\",\n")
 
         writeConnectionPoints(file, connectionPoints, false)
         if #decorationPoints > 0 then
