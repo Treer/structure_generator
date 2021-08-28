@@ -1,11 +1,3 @@
--- Set DEBUG_FLAGS to determine the behavior of nether.debug():
---   0 = off
---   1 = print(...)
---   2 = minetest.chat_send_all(...)
---   4 = minetest.log("info", ...)
-local DEBUG_FLAGS = 0
-
-
 
 -- Global structure_generator namespace
 structure_generator         = {}
@@ -18,6 +10,22 @@ if minetest.get_translator == nil then
 end
 local S = minetest.get_translator(structure_generator.modName)
 structure_generator.get_translator = S
+
+
+-- =================
+--   Configuration
+-- =================
+
+-- This is the file the scaffolding_commands will work from, it specifies the names and sizes of the prefabs.
+-- Change it to your own
+local PREFABS_TO_SCAFFOLD = structure_generator.modPath .. DIR_DELIM .. "example_ready_to_scaffold.lua"
+
+-- Set DEBUG_FLAGS to determine the behavior of nether.debug():
+--   0 = off
+--   1 = print(...)
+--   2 = minetest.chat_send_all(...)
+--   4 = minetest.log("info", ...)
+local DEBUG_FLAGS = 0
 
 
 -- ===================
@@ -87,7 +95,7 @@ dofile(structure_generator.modPath .. DIR_DELIM .. "structure_generator_lib.lua"
 dofile(structure_generator.modPath .. DIR_DELIM .. "structure_scaffolding_commands.lua")
 
 -- Load the demo file so the scaffolding_commands have something to work with
-dofile(structure_generator.modPath .. DIR_DELIM .. "example_ready_to_scaffold.lua")
+dofile(PREFABS_TO_SCAFFOLD)
 
 -- load the desertDungeon example structure for the wand to use
 dofile(structure_generator.modPath .. DIR_DELIM .. "example_ready_to_build.lua")

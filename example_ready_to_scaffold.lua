@@ -27,6 +27,9 @@ local prefabTag = {
 	treasure2       = "treasure2"
 }
 
+-- if set, this string is prepended to the file name of each prefab's
+-- schematic, and the "ready_to_build.lua" structure file.
+structGenLib.schematicNamePrefix = 'example_'
 
 structGenLib.register_prefab({
 	name     = "walled-off hallway",
@@ -35,7 +38,7 @@ structGenLib.register_prefab({
 });
 
 structGenLib.register_prefab({
-	name     = "long hallway", -- calling it "long hallway" since there's already a prefabTag using "hallway", and keeping the two distinct is handy later as we can refer to either one in validPrefabs tables.
+	name     = "long hallway", -- naming it "long hallway" since there's already a prefabTag using "hallway", and keeping the two distinct is handy later as we can refer to either one in validPrefabs tables.
 	size     = vector.new(7, 5, 5),
 	typeTags = prefabTag.hallway
 });
