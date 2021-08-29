@@ -46,6 +46,7 @@ minetest.register_node(nodeName_replaceable, {
     tiles = {
         "structure_generator_replaceable.png^[opacity:70",
     },
+    walkable = false,
     use_texture_alpha = "blend",
     groups = { dig_immediate = 3 },
 })
